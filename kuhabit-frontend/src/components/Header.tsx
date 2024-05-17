@@ -13,12 +13,16 @@ const Button = styled.button`
 
 const AppHeader = styled.header`
     display: flex;
-    padding: 1%;
     top: 0;
     position: fixed;
     background: #6B7280;
     width: 100vw;
-    align-content: space-between;
+    justify-content: space-between;
+    align-items: center;
+`;
+
+const LogoContainer = styled.div`
+    display: flex;
     align-items: center;
 `;
 
@@ -28,7 +32,17 @@ const Logo = styled.img`
 `
 
 const Link = styled.a`
-    background: red;
+    border-radius: 5px;
+    color: white;
+    font-size: 1.5em;
+    padding: 0.1em;
+    margin: 0.1em;
+    text-align: center;
+    cursor: pointer;
+    &:hover {
+        color: white;
+        transform: scale(1.05);
+    }
 `;
 
 const LinkContainer = styled.div`
@@ -37,17 +51,45 @@ const LinkContainer = styled.div`
     align-content: center;
 `
 
+const UserActions = styled.div`
+    display: flex;
+    padding: 20px;
+`;
+
+const UserLink = styled(Link)`
+    border-radius: 15px;
+    padding: 10px;
+    margin: 10px;
+    background: #413c3c;
+    &:hover {
+        color: lightgray;
+        transform: scale(1.05);
+    }
+    transition: ease-in-out;
+`
+
+const GetStartedLink = styled(UserLink)`
+    background: lightblue;
+    color: black;
+    &:hover {
+        color: #2e2a2a;
+    }
+`;
 
 const Header = () =>  {
     return(
         <AppHeader>
-            <>
-            <Logo alt="KuHabit Logo" src={LogoImage}></Logo>
-            <Title>KuHabit</Title>
-            </>
+            <LogoContainer>
+                <Logo alt="KuHabit Logo" src={LogoImage}></Logo>
+                <Title>KuHabit</Title>
+            </LogoContainer>
             <LinkContainer>
-                <Link>Home</Link>
+                <Link href="#">Home</Link>
             </LinkContainer>
+            <UserActions>
+                <UserLink>Log in</UserLink>
+                <GetStartedLink>Get Started</GetStartedLink>
+            </UserActions>
         </AppHeader>
     );
 }
