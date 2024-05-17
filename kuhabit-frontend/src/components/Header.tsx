@@ -7,14 +7,8 @@ const Title = styled.h1`
   color: white;
 `;
 
-const Button = styled.button`
-
-`;
-
 const AppHeader = styled.header`
     display: flex;
-    top: 0;
-    position: fixed;
     background: #6B7280;
     width: 100vw;
     justify-content: space-between;
@@ -64,12 +58,13 @@ const UserLink = styled(Link)`
     &:hover {
         color: lightgray;
         transform: scale(1.05);
+        filter: drop-shadow(0 0 2em #61dafbaa);
     }
     transition: ease-in-out;
 `
 
 const GetStartedLink = styled(UserLink)`
-    background: lightblue;
+    background: #2dca8e;
     color: black;
     &:hover {
         color: #2e2a2a;
@@ -82,10 +77,7 @@ const Header = () =>  {
             <LogoContainer>
                 <Logo alt="KuHabit Logo" src={LogoImage}></Logo>
                 <Title>KuHabit</Title>
-            </LogoContainer>
-            <LinkContainer>
-                <Link href="#">Home</Link>
-            </LinkContainer>
+            </LogoContainer> 
             <UserActions>
                 <UserLink>Log in</UserLink>
                 <GetStartedLink>Get Started</GetStartedLink>
