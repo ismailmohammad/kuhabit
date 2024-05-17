@@ -1,4 +1,5 @@
 import styled from "styled-components";
+import LogoImage from '../assets/cube-logo.png';
 
 const Title = styled.h1`
   font-size: 1.5em;
@@ -17,25 +18,36 @@ const AppHeader = styled.header`
     position: fixed;
     background: #6B7280;
     width: 100vw;
+    align-content: space-between;
+    align-items: center;
 `;
 
 const Logo = styled.img`
- max-width: 10%;
+    max-width: 3em;
+    padding: 1em;
 `
 
 const Link = styled.a`
+    background: red;
 `;
 
-type Links = {
-    
-}
+const LinkContainer = styled.div`
+    display: flex;
+    align-items: center;
+    align-content: center;
+`
+
 
 const Header = () =>  {
     return(
         <AppHeader>
-            <Logo alt="KuHabit Logo"></Logo>
+            <>
+            <Logo alt="KuHabit Logo" src={LogoImage}></Logo>
             <Title>KuHabit</Title>
-            <div className="header-links-container"></div>
+            </>
+            <LinkContainer>
+                <Link>Home</Link>
+            </LinkContainer>
         </AppHeader>
     );
 }
