@@ -1,5 +1,11 @@
-# kubudget
+# kuhabit
 Basic habit tracking application leveraging containerization and Kubernetes
+## Queue your habits, Cue your habits
+
+# Early Screenshot
+![image](https://github.com/ismailmohammad/kuhabit/assets/23105842/14a32b9c-8cf9-4d84-b04c-cb230668d972)
+
+
 
 Basic session authentication
 
