@@ -1,5 +1,5 @@
 import styled from "styled-components";
-import LogoImage from '../assets/cube-logo.png';
+import LogoImage from '../assets/cube-logo-white.png';
 
 const Title = styled.h1`
   font-size: 1.5em;
@@ -9,7 +9,7 @@ const Title = styled.h1`
 
 const AppHeader = styled.header`
     display: flex;
-    background: #6B7280;
+    background: #363333;
     width: 100vw;
     justify-content: space-between;
     align-items: center;
@@ -23,6 +23,8 @@ const LogoContainer = styled.div`
 const Logo = styled.img`
     max-width: 3em;
     padding: 1em;
+    animation: logo-jiggle infinite 2s linear;
+}
 `
 
 const Link = styled.a`
@@ -58,7 +60,8 @@ const UserLink = styled(Link)`
     &:hover {
         color: lightgray;
         transform: scale(1.05);
-        filter: drop-shadow(0 0 2em #61dafbaa);
+        filter: drop-shadow(0 0 2em #293e44aa);
+        transition: all 0.3s ease-in-out;
     }
     transition: ease-in-out;
 `
