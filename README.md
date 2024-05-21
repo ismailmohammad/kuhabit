@@ -4,6 +4,7 @@ Basic habit tracking application leveraging containerization and Kubernetes
 
 # Early Screenshot
 ![image](https://github.com/ismailmohammad/kuhabit/assets/23105842/14a32b9c-8cf9-4d84-b04c-cb230668d972)
+![image](https://github.com/ismailmohammad/kuhabit/assets/23105842/1278ede8-20d9-4e56-acb6-1839f61063f0)
 
 
 
