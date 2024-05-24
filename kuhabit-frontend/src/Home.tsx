@@ -1,15 +1,14 @@
-import './App.css'
 import Header from './components/Header'
 import Landing from './components/LandingPage/Landing'
 
-function App() {
+function Home() {
 
   return (
     <>
-      <Header></Header>
-      <Landing></Landing>
-      </>
+      <Header />
+      <Landing />
+    </>
   )
 }
 
-export default App
+export default Home
