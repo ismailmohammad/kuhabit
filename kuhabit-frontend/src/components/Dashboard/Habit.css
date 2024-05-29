@@ -1,0 +1,52 @@
+.habit-outer {
+    margin: 1em;
+    padding: 1em;
+    border-radius: 1em;
+    display: flex;
+    justify-content: space-between;
+    background-color: rgba(0, 0, 0, 0.445);
+    cursor: pointer;
+    &:hover {
+        transform: scale(1.02);
+    }
+    transition: all ease-in-out 0.2s;
+}
+
+.cube-logo {
+    height: 10em;
+    &:hover {
+        animation: logo-jiggle infinite 1s linear;
+    }
+}
+
+.habit-text {
+    align-self: center;
+}
+
+.recurring-days {
+    display: flex;   
+}
+
+.recurring-days .day {
+    margin: 1em;
+    padding: 1em;
+    border-radius: 1em;
+    background: rgb(79, 172, 75);
+
+}
+
+.habit-edit-actions {
+    display: flex;
+    justify-content: space-between;
+}
+
+.habit-edit-actions button {
+    margin: 1em;
+}
+
+.edit-habit {
+    background-color: rgb(28, 198, 255);
+}
+.remove-habit {
+    background-color: rgb(255, 80, 80);
+}
