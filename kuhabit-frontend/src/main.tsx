@@ -1,7 +1,8 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import Home from './Home.tsx'
-import ErrorPage from './error-page.tsx'
+import ErrorPage from './ErrorPage.tsx'
+import Dashboard from './components/Dashboard/Dashboard.tsx'
 import './index.css'
 
 
@@ -14,6 +15,11 @@ const router = createBrowserRouter([
   {
     path: "/",
     element: <Home />,
+    errorElement: <ErrorPage />
+  },
+  {
+    path: "/dashboard",
+    element: <Dashboard />,
     errorElement: <ErrorPage />
   },
 ]);

@@ -1,5 +1,6 @@
 import styled from "styled-components";
 import LogoImage from '../assets/cube-logo-white.png';
+import { Link } from "react-router-dom";
 
 const Title = styled.h1`
   font-size: 1.5em;
@@ -27,7 +28,7 @@ const Logo = styled.img`
 }
 `
 
-const Link = styled.a`
+const LinkItem = styled.a`
     border-radius: 5px;
     color: white;
     font-size: 1.5em;
@@ -52,7 +53,7 @@ const UserActions = styled.div`
     padding: 20px;
 `;
 
-const UserLink = styled(Link)`
+const UserLink = styled(LinkItem)`
     border-radius: 15px;
     padding: 10px;
     margin: 10px;
@@ -74,13 +75,15 @@ const GetStartedLink = styled(UserLink)`
     }
 `;
 
-const Header = () =>  {
-    return(
+const Header = () => {
+    return (
         <AppHeader>
-            <LogoContainer>
-                <Logo alt="KuHabit Logo" src={LogoImage}></Logo>
-                <Title>KuHabit</Title>
-            </LogoContainer> 
+            <Link to="/">
+                <LogoContainer>
+                    <Logo alt="KuHabit Logo" src={LogoImage}></Logo>
+                    <Title>KuHabit</Title>
+                </LogoContainer>
+            </Link>
             <UserActions>
                 <UserLink>Log in</UserLink>
                 <GetStartedLink>Get Started</GetStartedLink>
