@@ -2,9 +2,10 @@
 Basic habit tracking application leveraging containerization and Kubernetes
 ## Queue your habits, Cue your habits
 
-# Early Screenshot
-![image](https://github.com/ismailmohammad/kuhabit/assets/23105842/14a32b9c-8cf9-4d84-b04c-cb230668d972)
+# Early Screenshots
 ![image](https://github.com/ismailmohammad/kuhabit/assets/23105842/1278ede8-20d9-4e56-acb6-1839f61063f0)
+![Screenshot from 2024-05-29 15-46-00](https://github.com/ismailmohammad/kuhabit/assets/23105842/c5195b89-15f2-47a6-ba41-a21f992d89a0)
+![Screenshot from 2024-05-29 15-46-13](https://github.com/ismailmohammad/kuhabit/assets/23105842/f2d5eb76-eb80-4fec-9688-b09b256a71b6)
 
 
 
