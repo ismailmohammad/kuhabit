@@ -4,9 +4,10 @@ Basic habit tracking application leveraging containerization and Kubernetes
 
 # Early Screenshots
 
-![image](https://github.com/ismailmohammad/kuhabit/assets/23105842/1278ede8-20d9-4e56-acb6-1839f61063f0)
-![Screenshot from 2024-05-30 13-12-46](https://github.com/ismailmohammad/kuhabit/assets/23105842/1869d523-0525-4ddf-bb2c-537eefcd5177)
-![Screenshot from 2024-05-30 13-12-58](https://github.com/ismailmohammad/kuhabit/assets/23105842/36a087aa-41d9-4668-8852-b1d8283dc332)
+![image](https://github.com/ismailmohammad/kuhabit/assets/23105842/78e2e594-e45b-4b35-b83d-460d515aae3f)
+![Screenshot from 2024-05-30 16-30-12](https://github.com/ismailmohammad/kuhabit/assets/23105842/67fe6903-2d30-49a4-97c3-632135208e6b)
+![Screenshot from 2024-05-30 16-30-21](https://github.com/ismailmohammad/kuhabit/assets/23105842/38ead4da-49ef-4415-86c7-c3d792db05a3)
+
 
 Basic session authentication
 
