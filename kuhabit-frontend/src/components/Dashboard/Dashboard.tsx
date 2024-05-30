@@ -17,6 +17,7 @@ import CubeGreen from '../../assets/cube-logo-green.png';
 import CubeGreenTop from '../../assets/cube-logo-green-top.png';
 import CubeGreenRight from '../../assets/cube-logo-green-right.png';
 import CubeGreenLeft from '../../assets/cube-logo-green-left.png';
+import { useState } from "react";
 
 const negativeHabitLogos = [CubeRedTop, CubeRedRight, CubeRedLeft];
 const positiveHabitLogos = [CubeGreenLeft, CubeGreenRight, CubeGreenTop];
@@ -58,55 +59,88 @@ const AddHabitButton = styled.button`
 
 
 
-let mockHabits: HabitType[] = [
-    {
-        id: 1,
-        name: "Read a chapter from book",
-        complete: false,
-        recurrence: "Su-Mo-Tu-We-Th-Fr-Sa",
-        positiveType: true,
-    },
-    {
-        id: 2,
-        name: "Do 10 pushups",
-        complete: false,
-        recurrence: "Mo-Tu-We-Th-Fr",
-        positiveType: false
-    },
-    {
-        id: 3,
-        name: "Don't eat any sugary snacks.",
-        complete: true,
-        recurrence: "Su-Mo-Tu-We-Th-Fr-Sa",
-        positiveType: false
-    },
-    {
-        id: 4,
-        name: "Have 20 grams of protein",
-        complete: true,
-        recurrence: "Su-Mo-Tu-We-Th-Fr-Sa",
-        positiveType: true
-    }
-];
+
+
 
 
 export default function Dashboard() {
+
+    const [mockHabits, setMockHabits] = useState({
+        1: {
+            id: 1,
+            name: "Read a chapter from book",
+            complete: false,
+            recurrence: "Su-Mo-Tu-We-Th-Fr-Sa",
+            positiveType: true
+        },
+        2: {
+            id: 2,
+            name: "Do 10 pushups",
+            complete: false,
+            recurrence: "Mo-Tu-We-Th-Fr",
+            positiveType: false
+        },
+        3: {
+            id: 3,
+            name: "Don't eat any sugary snacks.",
+            complete: true,
+            recurrence: "Su-Mo-Tu-We-Th-Fr-Sa",
+            positiveType: false
+        },
+        4: {
+            id: 4,
+            name: "Have 20 grams of protein",
+            complete: true,
+            recurrence: "Su-Mo-Tu-We-Th-Fr-Sa",
+            positiveType: true
+        }
+    });
+
+    const deleteHabit = (id: number) => {
+        const update: boolean = confirm("Confirm deletion of habit?");
+        if (!update) return;
+    
+        const { [id]: deletedHabit, ...rest } = mockHabits;
+        setMockHabits(rest);
+    };
+
+    const completeDailyHabit = (id: number) => {
+        const update: boolean = confirm("Mark habit as complete for today?");
+        if (!update) return;
+    
+        setMockHabits((prevHabits) => {
+            const updatedHabits = { ...prevHabits };
+            if (updatedHabits[id]) {
+                updatedHabits[id].complete = true;
+            }
+            return updatedHabits;
+        });
+    };
+
+    function formatDate(date) {
+        const options = { weekday: 'long', month: 'long', day: 'numeric' };
+        return date.toLocaleDateString('en-US', options);
+    }
+    
+    const date = formatDate(new Date());
+
+
     return(
         <>
             <Header/>   
             <DashboardContainer>
-                <h1>Welcome, [Username]</h1>
+                <h1 style={{ color: "black"}}>Welcome, [PlaceholderUsername]<br/><span>{date}</span></h1>
                 <AddHabitContainer>
                     <AddHabitButton>Queue New Habit</AddHabitButton>
                 </AddHabitContainer>
                 <HabitsContainer>
-                    {mockHabits.map((habit: HabitType) => {
+                    {Object.values(mockHabits).map((habit: HabitType) => {
                         // Determine logo type (if habit is complete display filled in cube otherwise, grab a random logo)
                         let imgSrc = getRandomCubeLogo(habit.positiveType);
                         if (habit.complete) {
                             imgSrc = habit.positiveType ? CubeGreen : CubeRed;
                         }
-                        return <Habit key={habit.id} habitData={habit} imgSrc={imgSrc}></Habit>
+                        return <Habit key={habit.id} habitData={habit} imgSrc={imgSrc} deleteHabit={deleteHabit} completeDailyHabit={completeDailyHabit}></Habit>
                     })}
                 </HabitsContainer>
             </DashboardContainer>
