@@ -13,7 +13,7 @@ function Habit({ habitData, imgSrc, deleteHabit, completeDailyHabit }) {
 
     return (
         <div className='habit-outer'>
-            <img className={`cube-logo ${habitData.complete ? "" : "jiggle-on-hover"}`} src={imgSrc} alt='White cube logo with 3 faces, the top being red'
+            <img className={`cube-logo ${habitData.complete ? "" : "jiggle-on-hover"}`} src={imgSrc} alt='Cube logo indicating habit completeness'
                 onClick={markHabitComplete}>
 
             </img>
@@ -21,11 +21,11 @@ function Habit({ habitData, imgSrc, deleteHabit, completeDailyHabit }) {
             {/* Recurrences */}
             <div className='recurring-frequency-container'>
                 <h3>Recurring:</h3>
-                {/* {habitData.recurring.map(string => {
-                    console.log(string);
-                })} */}
                 <div className='recurring-days'>
                     {habitData.recurrence.split('-').map((day: string) => {
+                        if (new Date().toLocaleDateString('en-US', {weekday: 'long'}).startsWith(day)) {
+                            return <h4 className='day active-day'>{day}</h4>
+                        }
                         return (<h4 className='day'>{day}</h4>)
                     })}
                 </div>

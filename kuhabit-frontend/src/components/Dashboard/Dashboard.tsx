@@ -75,7 +75,7 @@ export default function Dashboard() {
         },
         2: {
             id: 2,
-            name: "Do 10 pushups",
+            name: "Don't use phone more than an hour",
             complete: false,
             recurrence: "Mo-Tu-We-Th-Fr",
             positiveType: false
@@ -117,9 +117,8 @@ export default function Dashboard() {
         });
     };
 
-    function formatDate(date) {
-        const options = { weekday: 'long', month: 'long', day: 'numeric' };
-        return date.toLocaleDateString('en-US', options);
+    function formatDate(date: Date) {
+        return date.toLocaleDateString('en-US', {weekday: 'long', month: 'long', day: 'numeric'});
     }
     
     const date = formatDate(new Date());
@@ -127,9 +126,9 @@ export default function Dashboard() {
 
     return(
         <>
-            <Header/>   
+            <Header staticHeader={true}/>   
             <DashboardContainer>
-                <h1 style={{ color: "black"}}>Welcome, [PlaceholderUsername]<br/><span>{date}</span></h1>
+                <h1 style={{ color: "black"}}>Welcome [PlaceholderUsername],<br/><span>{date}</span></h1>
                 <AddHabitContainer>
                     <AddHabitButton>Queue New Habit</AddHabitButton>
                 </AddHabitContainer>

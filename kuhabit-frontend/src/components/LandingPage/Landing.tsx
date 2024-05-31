@@ -1,4 +1,5 @@
 import styled from "styled-components";
+import Mockup from '../../assets/mockups.png';
 
 const Page = styled.div`
     display: flex;
@@ -27,6 +28,10 @@ const LandingTextContainer = styled(LandingContainer)`
     display: flex;
 `;
 
+const MockupImage = styled.img`
+    width: 100%;
+`;
+
 export default function Landing() {
     return (
         <><Slogan>Queue Your Habits, Cue Your Habits</Slogan>
@@ -36,7 +41,7 @@ export default function Landing() {
                 <h2>After reading Atomic Habits by James Clear, I decided to create this simple Habit Tracker app. The book highlights the profound impact of habit building to build better habits and curb bad ones. Over 40-50% of our daily actions are supposedly out of habit, so creating a tracker that will never sell your data was the goal here. You can grab the book on Amazon if it interests you.</h2>
             </LandingTextContainer>
             <LandingContainer>
-                <p>Placeholder for screenshots of tracker app on a few screens (mobile, desktop, tablet) - mockup frames with actual screenshots</p>
+                <MockupImage src={Mockup}></MockupImage>
             </LandingContainer>
         </Page>
         </>

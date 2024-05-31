@@ -75,7 +75,11 @@ const GetStartedLink = styled(UserLink)`
     }
 `;
 
-const Header = () => {
+interface HeaderProps {
+    staticHeader: boolean
+}
+
+const Header = (headerProps: HeaderProps) => {
     return (
         <AppHeader>
             <Link to="/">
@@ -84,10 +88,12 @@ const Header = () => {
                     <Title>KuHabit</Title>
                 </LogoContainer>
             </Link>
+            {!headerProps.staticHeader ? 
             <UserActions>
-                <UserLink>Log in</UserLink>
-                <GetStartedLink>Get Started</GetStartedLink>
+                <Link to={"/login"}><UserLink>Log in</UserLink></Link>
+                <Link to={"/register"}><GetStartedLink>Get Started</GetStartedLink></Link>
             </UserActions>
+            : null}
         </AppHeader>
     );
 }

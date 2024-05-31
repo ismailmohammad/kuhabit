@@ -5,7 +5,7 @@ function Home() {
 
   return (
     <>
-      <Header />
+      <Header staticHeader={false} />
       <Landing />
     </>
   )

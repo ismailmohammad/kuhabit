@@ -10,6 +10,7 @@
         transform: scale(1.02);
     }
     transition: all ease-in-out 0.2s;
+    flex-wrap: wrap;
 }
 
 .cube-logo {
@@ -18,7 +19,7 @@
 
 .jiggle-on-hover {
     &:hover {
-        animation: logo-jiggle infinite 1s linear;
+        animation: logo-jiggle infinite 0.2s linear;
     }
 }
 
@@ -39,6 +40,10 @@
     border-radius: 1em;
     background: rgb(79, 172, 75);
 
+}
+
+.active-day {
+    background: rgb(75, 161, 172) !important;
 }
 
 .habit-edit-actions {
