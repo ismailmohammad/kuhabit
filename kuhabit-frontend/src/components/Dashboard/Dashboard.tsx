@@ -67,7 +67,11 @@ const AddHabitButton = styled.button`
 
 export default function Dashboard() {
 
-    const [mockHabits, setMockHabits] = useState({
+    type HabitsState = {
+        [key: number]: HabitType;
+    };
+
+    const [mockHabits, setMockHabits] = useState<HabitsState>({
         1: {
             id: 1,
             name: "Read a chapter from book",

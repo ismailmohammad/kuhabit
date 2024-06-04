@@ -25,8 +25,7 @@ const Logo = styled.img`
     max-width: 3em;
     padding: 1em;
     animation: logo-jiggle infinite 2s linear;
-}
-`
+`;
 
 const LinkItem = styled.a`
     border-radius: 5px;
@@ -42,11 +41,7 @@ const LinkItem = styled.a`
     }
 `;
 
-const LinkContainer = styled.div`
-    display: flex;
-    align-items: center;
-    align-content: center;
-`
+
 
 const UserActions = styled.div`
     display: flex;
