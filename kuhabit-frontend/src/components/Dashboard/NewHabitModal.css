@@ -1,0 +1,125 @@
+/* Slider css from https://www.w3schools.com/howto/howto_css_switch.asp */
+ /* The switch - the box around the slider */
+ .switch {
+    position: relative;
+    display: inline-block;
+    width: 60px;
+    height: 34px;
+  }
+  
+  /* Hide default HTML checkbox */
+  .switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+  
+  /* The slider */
+  .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #db4242;
+    -webkit-transition: .4s;
+    transition: .4s;
+  }
+  
+  .slider:before {
+    position: absolute;
+    content: "";
+    height: 26px;
+    width: 26px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    -webkit-transition: .4s;
+    transition: .4s;
+  }
+  
+  input:checked + .slider {
+    background-color: #35c063;
+  }
+  
+  input:focus + .slider {
+    box-shadow: 0 0 1px #35c063;
+  }
+  
+  input:checked + .slider:before {
+    -webkit-transform: translateX(26px);
+    -ms-transform: translateX(26px);
+    transform: translateX(26px);
+  }
+  
+  /* Rounded sliders */
+  .slider.round {
+    border-radius: 34px;
+  }
+  
+  .slider.round:before {
+    border-radius: 50%;
+  } 
+
+  /* App CSS */
+
+  .curb-build-switch-container {
+    display: flex;
+    justify-content: space-evenly;
+    flex-direction: row;
+    width: 50%;
+    position: relative;
+    left: 25%;
+    align-items: center;
+  }
+
+  .cube-toggle-logo {
+    max-height: 3em;
+    max-width: 3em;
+    animation: logo-jiggle infinite 1s linear;
+  }
+
+  form {
+    display: flex;
+    flex-direction: column;
+  }
+
+  form input {
+    width: 90%;
+    padding-left: 5px;
+    background: rgba(255, 255, 255, 0.527);
+    font-size: 3em;
+    border-radius:0.35em;
+}
+
+.select-schedule {
+  font-size: 2em;
+  margin-right: 1em;
+}
+
+.select-schedule select {
+  font-size: 1em;
+  border-radius: 0.5em;
+}
+
+.select-schedule-options {
+  font-size: 2em;
+}
+
+.days-selected {
+  display: flex;
+  flex-direction: column;
+}
+
+.days-selected input {
+  cursor: pointer;
+}
+
+.create-habit-button {
+  display: flex;
+  align-self: center;
+  background-color: #35c063;
+  justify-self: center;
+  margin: 1em;
+}

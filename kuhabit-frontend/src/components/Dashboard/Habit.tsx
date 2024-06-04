@@ -1,6 +1,16 @@
+import { HabitType } from '../../types/habit';
 import './Habit.css';
 
-function Habit({ habitData, imgSrc, deleteHabit, completeDailyHabit }) {
+interface HabitProps {
+    habitData: HabitType,
+    imgSrc: string,
+    deleteHabit: (id: number) => void,
+    completeDailyHabit: (id: number) => void,
+}
+
+function Habit(props: HabitProps) {
+
+    const { habitData, deleteHabit, imgSrc, completeDailyHabit} = props;
 
     function deleteHabitBackend() {
         deleteHabit(habitData.id);
@@ -24,7 +34,8 @@ function Habit({ habitData, imgSrc, deleteHabit, completeDailyHabit }) {
                 <div className='recurring-days'>
                     {habitData.recurrence.split('-').map((day: string) => {
                         if (new Date().toLocaleDateString('en-US', {weekday: 'long'}).startsWith(day)) {
-                            return <h4 className='day active-day'>{day}</h4>
+                            const markActiveDay = habitData.complete ? 'day active-day' : 'day active-day-complete'
+                            return <h4 className={markActiveDay}>{day}</h4>
                         }
                         return (<h4 className='day'>{day}</h4>)
                     })}

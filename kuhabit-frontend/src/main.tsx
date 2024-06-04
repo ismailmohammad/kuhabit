@@ -14,6 +14,7 @@ import {
   RouterProvider,
 } from "react-router-dom";
 import LoginPage from './components/UserActionPages/LoginPage.tsx'
+import { Toaster } from 'react-hot-toast'
 
 const router = createBrowserRouter([
   {
@@ -41,6 +42,7 @@ const router = createBrowserRouter([
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <Provider store={store}>
     <React.StrictMode>
+      <Toaster></Toaster>
       <RouterProvider router={router} />
     </React.StrictMode>
   </Provider>,

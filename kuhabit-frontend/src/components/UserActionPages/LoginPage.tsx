@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import Header from "../Header";
 import "./LoginPage.css";
 import { Link, useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 
 const LoginPage = () => {
     const [email, setEmail] = useState('');
@@ -12,7 +13,10 @@ const LoginPage = () => {
     const handleLogin = (e: React.FormEvent) => {
         e.preventDefault();
         if (email === "a@b.com" && password === "password") {
+            toast.success("Successfully logged in.");
             navigate("/dashboard")
+        } else {
+            toast.error("Email or password is incorrect");
         }
     }
 

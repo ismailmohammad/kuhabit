@@ -18,6 +18,8 @@ import CubeGreenTop from '../../assets/cube-logo-green-top.png';
 import CubeGreenRight from '../../assets/cube-logo-green-right.png';
 import CubeGreenLeft from '../../assets/cube-logo-green-left.png';
 import { useState } from "react";
+import NewHabitModal from "./NewHabitModal";
+import toast from "react-hot-toast";
 
 const negativeHabitLogos = [CubeRedTop, CubeRedRight, CubeRedLeft];
 const positiveHabitLogos = [CubeGreenLeft, CubeGreenRight, CubeGreenTop];
@@ -109,12 +111,13 @@ export default function Dashboard() {
         if (!update) return;
     
         setMockHabits((prevHabits) => {
-            const updatedHabits = { ...prevHabits };
+            const updatedHabits: any = { ...prevHabits };
             if (updatedHabits[id]) {
                 updatedHabits[id].complete = true;
             }
+            toast.success(`Marked '${updatedHabits[id].name}' as complete`)
             return updatedHabits;
-        });
+        })
     };
 
     function formatDate(date: Date) {
@@ -122,7 +125,33 @@ export default function Dashboard() {
     }
     
     const date = formatDate(new Date());
+    
+    // New Habit Modal
+    const [showModal, setShowModal] = useState(false);
+    const toggleModal = () => {
+        setShowModal(!showModal);
+    };
 
+    const generateUniqueId = (): number => {
+        let newId = Math.floor(Math.random() * 10000);
+        while (mockHabits[newId]) {
+          newId = Math.floor(Math.random() * 10000);
+        }
+        return newId;
+      };
+
+    const createHabit = (habit: HabitType) => {
+        const newHabit: HabitType = {
+            id: generateUniqueId(),
+            complete: false,
+            name: habit.name,
+            recurrence: habit.recurrence,
+            positiveType: habit.positiveType
+        }
+        setMockHabits((prevHabits) => {
+            return { ...prevHabits, [newHabit.id]: newHabit };
+        });
+    }
 
     return(
         <>
@@ -130,7 +159,7 @@ export default function Dashboard() {
             <DashboardContainer>
                 <h1 style={{ color: "black"}}>Welcome [PlaceholderUsername],<br/><span>{date}</span></h1>
                 <AddHabitContainer>
-                    <AddHabitButton>Queue New Habit</AddHabitButton>
+                    <AddHabitButton onClick={toggleModal}>Queue New Habit</AddHabitButton>
                 </AddHabitContainer>
                 <HabitsContainer>
                     {Object.values(mockHabits).map((habit: HabitType) => {
@@ -143,6 +172,7 @@ export default function Dashboard() {
                     })}
                 </HabitsContainer>
             </DashboardContainer>
+            <NewHabitModal showModal={showModal} toggleModal={toggleModal} createHabit={createHabit}></NewHabitModal>
         </>
     );
 }

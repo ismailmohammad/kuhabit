@@ -46,6 +46,10 @@
     background: rgb(75, 161, 172) !important;
 }
 
+.active-day-complete {
+    background: rgb(172, 162, 75) !important;
+}
+
 .habit-edit-actions {
     /* display: flex; */
     align-self: center;
