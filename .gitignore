@@ -5,3 +5,4 @@ node_modules/
 dist/
 backend/server
 backend/*.exe
+*.plan
