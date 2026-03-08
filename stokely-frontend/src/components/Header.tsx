@@ -32,6 +32,8 @@ const LogoContainer = styled.div`
     align-items: center;
     gap: 0.5rem;
     transition: transform 0.2s ease;
+    min-width: 0;
+    flex-shrink: 1;
 
     &:hover {
         transform: translateY(-1px);
@@ -74,6 +76,8 @@ const NavActions = styled.div`
     align-items: center;
     gap: 0.5rem;
     padding: 0.5rem 0;
+    min-width: 0;
+    flex-shrink: 0;
 `;
 
 const NavBtn = styled.button`
@@ -85,9 +89,18 @@ const NavBtn = styled.button`
     font-size: 0.9rem;
     cursor: pointer;
     transition: all 0.2s ease;
+    white-space: nowrap;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
     &:hover {
         background: #3a3a3a;
         border-color: #666;
+    }
+
+    @media (max-width: 480px) {
+        padding: 0.4rem 0.65rem;
+        font-size: 0.82rem;
     }
 `;
 

@@ -10,6 +10,18 @@
     box-sizing: border-box;
 }
 
+@media (max-width: 480px) {
+    .settings-modal-overlay {
+        align-items: flex-end;
+        padding: 0;
+    }
+    .settings-modal-box {
+        max-width: 100%;
+        border-radius: 16px 16px 0 0;
+        padding: 1.25rem 1rem 2rem;
+    }
+}
+
 .settings-modal-box {
     background: #1e1e1e;
     border: 1px solid #333;

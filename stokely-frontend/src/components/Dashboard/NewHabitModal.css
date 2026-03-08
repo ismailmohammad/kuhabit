@@ -11,6 +11,13 @@
     animation: modal-fade-in 180ms ease-out;
 }
 
+@media (max-width: 480px) {
+    .modal-overlay {
+        align-items: flex-end;
+        padding: 0;
+    }
+}
+
 .modal-box {
     background: #1e1e1e;
     border: 1px solid #333;
@@ -24,6 +31,15 @@
     animation: modal-pop-in 220ms cubic-bezier(0.34, 1.2, 0.64, 1);
     scrollbar-width: thin;
     scrollbar-color: #444 #1a1a1a;
+}
+
+@media (max-width: 480px) {
+    .modal-box {
+        max-width: 100%;
+        max-height: 92vh;
+        border-radius: 16px 16px 0 0;
+        padding: 1.25rem 1rem 2rem;
+    }
 }
 
 .modal-overlay--out {

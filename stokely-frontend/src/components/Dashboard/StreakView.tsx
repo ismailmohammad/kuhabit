@@ -15,15 +15,17 @@ const Grid = styled.div`
 
 const FreezeBar = styled.div`
     display: flex;
-    align-items: center;
-    gap: 0.5rem;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.5rem;
     margin-bottom: 1rem;
     padding: 0.6rem 1rem;
     background: #1a1a1a;
     border: 1px solid #2a2a2a;
     border-radius: 10px;
-    font-size: 0.9rem;
+    font-size: 0.88rem;
     color: #aaa;
+    line-height: 1.5;
 `;
 
 const FreezeCount = styled.span`
@@ -62,8 +64,12 @@ const CubeImg = styled.img`
 
 const CardName = styled.span`
     flex: 1;
+    min-width: 0;
     font-size: 1rem;
     font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 `;
 
 const StreakBadge = styled.span<{ $active: boolean }>`

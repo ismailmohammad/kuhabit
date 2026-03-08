@@ -100,6 +100,12 @@ const Page = styled.div`
     margin: 0 auto;
     padding: 1.5rem 1rem;
     animation: page-fade-in 0.22s ease-out;
+    box-sizing: border-box;
+    width: 100%;
+
+    @media (max-width: 480px) {
+        padding: 1rem 0.75rem;
+    }
 `;
 
 const PageHeader = styled.div`
@@ -129,15 +135,23 @@ const AddButton = styled.button`
     font-size: 0.95rem;
     cursor: pointer;
     transition: background 0.2s;
+    white-space: nowrap;
+    flex-shrink: 0;
     &:hover { background: #25b07b; }
 `;
 
 const ViewTabBar = styled.div`
     display: flex;
-    gap: 0.25rem;
+    gap: 0;
     margin-bottom: 1.25rem;
     border-bottom: 1px solid #2a2a2a;
     padding-bottom: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    &::-webkit-scrollbar { display: none; }
+    /* negative margin trick so border goes full width even with padding on Page */
+    flex-shrink: 0;
 `;
 
 const ViewTab = styled.button<{ $active: boolean; $highlight?: boolean }>`
@@ -146,13 +160,20 @@ const ViewTab = styled.button<{ $active: boolean; $highlight?: boolean }>`
     color: ${p => p.$active ? '#2dca8e' : '#666'};
     font-size: 0.9rem;
     font-weight: ${p => p.$active ? '600' : '400'};
-    padding: 0.5rem 1rem;
+    padding: 0.5rem 0.85rem;
     cursor: pointer;
     border-bottom: 2px solid ${p => p.$active ? '#2dca8e' : 'transparent'};
     margin-bottom: -1px;
     transition: color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+    flex-shrink: 0;
     &:hover { color: ${p => p.$active ? '#2dca8e' : '#aaa'}; }
     animation: ${p => p.$highlight ? tabPulse : 'none'} 2.4s ease;
+
+    @media (max-width: 480px) {
+        font-size: 0.82rem;
+        padding: 0.45rem 0.65rem;
+    }
 `;
 
 const CalendarInput = styled.input`
