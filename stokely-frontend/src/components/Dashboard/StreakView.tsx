@@ -113,7 +113,42 @@ const DayDot = styled.div<{ $state: 'completed' | 'frozen' | 'missed' | 'future'
         }
     }};
     border: 1px solid ${p => p.$state === 'unscheduled' ? '#222' : 'transparent'};
-    title: ${p => p.$state};
+`;
+
+const DayDotButton = styled.button`
+    border: none;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+`;
+
+const DayDotTooltip = styled.div`
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(20, 20, 20, 0.88);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    white-space: nowrap;
+    border-radius: 9px;
+    padding: 0.32rem 0.48rem;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+    z-index: 15;
+
+    ${DayDotButton}:hover &,
+    ${DayDotButton}:focus-visible & {
+        opacity: 1;
+    }
 `;
 
 const LegendRow = styled.div`
@@ -148,7 +183,12 @@ const EmptyStreak = styled.div`
 
 type CardState = { detail: StreakDetail | null; loading: boolean };
 
-export default function StreakView({ habits }: { habits: HabitType[] }) {
+type StreakViewProps = {
+    habits: HabitType[];
+    onDaySelect: (dateValue: string, habitName: string) => void;
+};
+
+export default function StreakView({ habits, onDaySelect }: StreakViewProps) {
     const [expanded, setExpanded] = useState<number | null>(null);
     const [cardData, setCardData] = useState<Record<number, CardState>>({});
 
@@ -237,11 +277,16 @@ export default function StreakView({ habits }: { habits: HabitType[] }) {
                                                         dotState = 'missed';
                                                     }
                                                     return (
-                                                        <DayDot
+                                                        <DayDotButton
                                                             key={day.date}
-                                                            $state={dotState}
-                                                            title={`${day.date}: ${dotState}`}
-                                                        />
+                                                            onClick={() => onDaySelect(day.date, habit.name)}
+                                                            aria-label={`${day.date}: ${dotState}. Open in calendar view`}
+                                                        >
+                                                            <DayDot $state={dotState} />
+                                                            <DayDotTooltip>
+                                                                {day.date} • {dotState}
+                                                            </DayDotTooltip>
+                                                        </DayDotButton>
                                                     );
                                                 })}
                                             </HistoryGrid>

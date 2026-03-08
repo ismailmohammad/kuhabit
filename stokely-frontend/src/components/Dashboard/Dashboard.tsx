@@ -2,7 +2,7 @@ import styled, { keyframes } from "styled-components";
 import Habit from "./Habit";
 import StreakView from "./StreakView";
 import { HabitType, DashboardView } from "../../types/habit";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import HabitModal from "./NewHabitModal";
 import toast from "react-hot-toast";
 import { api } from "../../api/api";
@@ -33,6 +33,8 @@ function getRandomCubeLogo(positive: boolean): string {
 function todayISO(): string {
     return new Date().toISOString().split('T')[0];
 }
+
+const ALL_TAB_PAGE_SIZE = 20;
 
 // ── Animations ─────────────────────────────────────────────────────────────────
 
@@ -119,9 +121,93 @@ const CalendarInput = styled.input`
     border-radius: 8px;
     padding: 0.4rem 0.75rem;
     font-size: 0.9rem;
-    margin-bottom: 1rem;
+    margin-bottom: 0;
     color-scheme: dark;
     cursor: pointer;
+`;
+
+const CalendarControls = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+`;
+
+const CalendarResetBtn = styled.button`
+    background: #2a2a2a;
+    color: #ddd;
+    border: 1px solid #444;
+    border-radius: 8px;
+    padding: 0.4rem 0.75rem;
+    min-height: 33px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+
+    &:hover {
+        background: #333;
+        border-color: #5a5a5a;
+    }
+`;
+
+const LazyLoadSentinel = styled.div`
+    height: 28px;
+    margin-top: 0.5rem;
+`;
+
+const SearchInput = styled.input`
+    width: 100%;
+    background: #1b1b1b;
+    color: #f1f1f1;
+    border: 1px solid #333;
+    border-radius: 10px;
+    padding: 0.58rem 0.8rem;
+    font-size: 0.9rem;
+    margin-bottom: 0;
+    box-sizing: border-box;
+    transition: border-color 0.15s ease;
+
+    &::placeholder {
+        color: #6f6f6f;
+    }
+
+    &:focus {
+        outline: none;
+        border-color: #2dca8e;
+    }
+`;
+
+const SearchWrap = styled.div`
+    position: relative;
+    margin-bottom: 0.85rem;
+`;
+
+const SearchClearBtn = styled.button`
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 1.35rem;
+    height: 1.35rem;
+    border: none;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    font-size: 0.8rem;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background 0.15s ease;
+
+    &:hover {
+        background: rgba(255, 255, 255, 0.2);
+    }
 `;
 
 const HabitsContainer = styled.div`
@@ -281,6 +367,9 @@ export default function Dashboard() {
     const [view, setView] = useState<DashboardView>('daily');
     const [calendarDate, setCalendarDate] = useState<string>(todayISO());
     const [contentKey, setContentKey] = useState(0);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [allVisibleCount, setAllVisibleCount] = useState(ALL_TAB_PAGE_SIZE);
+    const allLoadMoreRef = useRef<HTMLDivElement | null>(null);
 
     const [confirmState, setConfirmState] = useState<ConfirmState>(null);
     const [confirmClosing, setConfirmClosing] = useState(false);
@@ -303,6 +392,7 @@ export default function Dashboard() {
     useEffect(() => {
         let cancelled = false;
         async function load() {
+            if (!cancelled) setLoading(true);
             try {
                 if (!userInfo) {
                     const me = await api.auth.me();
@@ -322,7 +412,7 @@ export default function Dashboard() {
         }
         load();
         return () => { cancelled = true; };
-    }, [view, calendarDate]);
+    }, [view, calendarDate, dispatch, navigate, userInfo]);
 
     const effectiveDate = view === 'calendar' ? calendarDate : undefined;
 
@@ -335,6 +425,15 @@ export default function Dashboard() {
         setConfirmClosing(false);
         setConfirmState(state);
     };
+
+    useEffect(() => {
+        if (!confirmState) return;
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') dismissConfirm();
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [confirmState]);
 
     const doToggle = async (habit: HabitType, next: boolean) => {
         setHabits(prev => prev.map(h => h.id === habit.id ? { ...h, complete: next } : h));
@@ -429,8 +528,50 @@ export default function Dashboard() {
     };
 
     const date = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-    const incomplete = habits.filter(h => !h.complete);
-    const complete = habits.filter(h => h.complete);
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const filteredHabits = normalizedQuery
+        ? habits.filter(h =>
+            h.name.toLowerCase().includes(normalizedQuery) ||
+            (h.notes ?? '').toLowerCase().includes(normalizedQuery)
+        )
+        : habits;
+    const effectiveViewDate = view === 'calendar' ? calendarDate : todayISO();
+    const archivedHabits = filteredHabits.filter(h => {
+        if (!h.recurrenceEnd) return false;
+        const endDay = h.recurrenceEnd.split('T')[0];
+        return endDay <= effectiveViewDate;
+    });
+    const archivedIds = new Set(archivedHabits.map(h => h.id));
+    const activeHabits = filteredHabits.filter(h => !archivedIds.has(h.id));
+    const incomplete = activeHabits.filter(h => !h.complete);
+    const complete = activeHabits.filter(h => h.complete);
+    const lazyLoadAllEnabled = view === 'all' && normalizedQuery === '';
+    const visibleIncomplete = lazyLoadAllEnabled ? incomplete.slice(0, allVisibleCount) : incomplete;
+    const visibleComplete = lazyLoadAllEnabled ? complete.slice(0, allVisibleCount) : complete;
+    const hasMoreAllHabits = lazyLoadAllEnabled && (
+        visibleIncomplete.length < incomplete.length ||
+        visibleComplete.length < complete.length
+    );
+
+    useEffect(() => {
+        if (!lazyLoadAllEnabled) return;
+        setAllVisibleCount(ALL_TAB_PAGE_SIZE);
+    }, [lazyLoadAllEnabled, habits.length]);
+
+    useEffect(() => {
+        if (!hasMoreAllHabits || !allLoadMoreRef.current) return;
+        const node = allLoadMoreRef.current;
+        const observer = new IntersectionObserver(
+            entries => {
+                const entry = entries[0];
+                if (!entry?.isIntersecting) return;
+                setAllVisibleCount(prev => prev + ALL_TAB_PAGE_SIZE);
+            },
+            { root: null, rootMargin: '200px 0px 200px 0px', threshold: 0.01 }
+        );
+        observer.observe(node);
+        return () => observer.disconnect();
+    }, [hasMoreAllHabits]);
 
     const views: { id: DashboardView; label: string }[] = [
         { id: 'daily', label: 'Daily' },
@@ -456,18 +597,64 @@ export default function Dashboard() {
 
                 <ViewTabBar>
                     {views.map(v => (
-                        <ViewTab key={v.id} $active={view === v.id} onClick={() => setView(v.id)}>
+                        <ViewTab
+                            key={v.id}
+                            $active={view === v.id}
+                            onClick={() => {
+                                if (view === v.id) return;
+                                setLoading(true);
+                                setView(v.id);
+                            }}
+                        >
                             {v.label}
                         </ViewTab>
                     ))}
                 </ViewTabBar>
 
-                {view === 'calendar' && (
-                    <CalendarInput
-                        type="date"
-                        value={calendarDate}
-                        onChange={e => setCalendarDate(e.target.value)}
+                <SearchWrap>
+                    <SearchInput
+                        type="text"
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        placeholder="Search habits by name or notes..."
+                        aria-label="Search habits by name or notes"
+                        style={{ paddingRight: searchQuery ? '2.3rem' : undefined }}
                     />
+                    {searchQuery && (
+                        <SearchClearBtn
+                            type="button"
+                            aria-label="Clear search"
+                            title="Clear search"
+                            onClick={() => setSearchQuery('')}
+                        >
+                            ×
+                        </SearchClearBtn>
+                    )}
+                </SearchWrap>
+
+                {view === 'calendar' && (
+                    <CalendarControls>
+                        <CalendarInput
+                            type="date"
+                            value={calendarDate}
+                            onChange={e => {
+                                setLoading(true);
+                                setCalendarDate(e.target.value);
+                            }}
+                        />
+                        <CalendarResetBtn
+                            type="button"
+                            onClick={() => {
+                                const today = todayISO();
+                                const shouldRefetch = calendarDate !== today;
+                                if (shouldRefetch) setLoading(true);
+                                setSearchQuery('');
+                                setCalendarDate(today);
+                            }}
+                        >
+                            Reset All
+                        </CalendarResetBtn>
+                    </CalendarControls>
                 )}
 
                 {loading ? (
@@ -475,28 +662,50 @@ export default function Dashboard() {
                 ) : (
                     <ContentArea key={contentKey}>
                         {view === 'streak' ? (
-                            <StreakView habits={habits} />
-                        ) : habits.length === 0 ? (
+                            <StreakView
+                                habits={filteredHabits}
+                                onDaySelect={(dateValue, habitName) => {
+                                    setLoading(true);
+                                    setView('calendar');
+                                    setCalendarDate(dateValue);
+                                    setSearchQuery(habitName);
+                                }}
+                            />
+                        ) : filteredHabits.length === 0 ? (
                             <EmptyState>
-                                <p style={{ fontSize: "1.1rem", marginBottom: "0.5rem" }}>No habits here.</p>
-                                <p style={{ fontSize: "0.9rem" }}>Click <strong>+ New Habit</strong> to add one.</p>
+                                <p style={{ fontSize: "1.1rem", marginBottom: "0.5rem" }}>
+                                    {normalizedQuery ? 'No habits match your search.' : 'No habits here.'}
+                                </p>
+                                {!normalizedQuery && (
+                                    <p style={{ fontSize: "0.9rem" }}>Click <strong>+ New Habit</strong> to add one.</p>
+                                )}
                             </EmptyState>
                         ) : (
                             <>
                                 <HabitSection
                                     label={`To Do — ${incomplete.length}`}
-                                    habits={incomplete}
+                                    habits={visibleIncomplete}
                                     getLogo={getLogo}
                                     onToggleComplete={handleToggleComplete}
                                     onEdit={openEdit}
                                 />
                                 <HabitSection
                                     label={`Completed — ${complete.length}`}
-                                    habits={complete}
+                                    habits={visibleComplete}
                                     getLogo={getLogo}
                                     onToggleComplete={handleToggleComplete}
                                     onEdit={openEdit}
                                 />
+                                <HabitSection
+                                    label={`Archived — ${archivedHabits.length}`}
+                                    habits={archivedHabits}
+                                    getLogo={getLogo}
+                                    onToggleComplete={handleToggleComplete}
+                                    onEdit={openEdit}
+                                />
+                                {hasMoreAllHabits && (
+                                    <LazyLoadSentinel ref={allLoadMoreRef} aria-hidden="true" />
+                                )}
                             </>
                         )}
                     </ContentArea>

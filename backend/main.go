@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net"
 	"net/url"
@@ -63,6 +64,7 @@ func main() {
 	}
 
 	db.AutoMigrate(&User{}, &Habit{}, &HabitLog{}, &PushSubscription{}, &StreakFreeze{})
+	seedInitialStreakFreezes()
 
 	router := gin.Default()
 
@@ -168,4 +170,27 @@ func sanitizeDSN(dsn string) string {
 	password := userinfo[colonIdx+1:]
 
 	return scheme + user + ":" + url.PathEscape(password) + hostPart
+}
+
+// seedInitialStreakFreezes ensures older accounts also start with 3 freezes.
+func seedInitialStreakFreezes() {
+	var users []User
+	if err := db.Select("id").Find(&users).Error; err != nil {
+		log.Printf("freeze seed skipped: failed to list users: %v", err)
+		return
+	}
+	for _, user := range users {
+		var freeze StreakFreeze
+		err := db.Where("user_id = ?", user.ID).First(&freeze).Error
+		if err == nil {
+			continue
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Printf("freeze seed skipped for user %d: %v", user.ID, err)
+			continue
+		}
+		if createErr := db.Create(&StreakFreeze{UserID: user.ID, Count: 3}).Error; createErr != nil {
+			log.Printf("freeze seed create failed for user %d: %v", user.ID, createErr)
+		}
+	}
 }

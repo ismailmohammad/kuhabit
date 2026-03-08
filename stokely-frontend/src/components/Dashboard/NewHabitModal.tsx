@@ -172,9 +172,11 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
     const [notes, setNotes] = useState('');
     const [reminderTime, setReminderTime] = useState('');
 
-    // End habit confirm state
-    const [showEndConfirm, setShowEndConfirm] = useState(false);
-    const [endAck, setEndAck] = useState(false);
+    // Danger zone confirm state
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [deleteAck, setDeleteAck] = useState(false);
+    const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
+    const [archiveAck, setArchiveAck] = useState(false);
 
     useEffect(() => {
         if (showModal) {
@@ -220,9 +222,31 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
             setUseEndDate(false);
             setRecurrenceEnd('');
         }
-        setShowEndConfirm(false);
-        setEndAck(false);
+        setShowDeleteConfirm(false);
+        setDeleteAck(false);
+        setShowArchiveConfirm(false);
+        setArchiveAck(false);
     }, [habitToEdit, showModal]);
+
+    useEffect(() => {
+        if (!mounted) return;
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key !== 'Escape') return;
+            if (showDeleteConfirm) {
+                setShowDeleteConfirm(false);
+                setDeleteAck(false);
+                return;
+            }
+            if (showArchiveConfirm) {
+                setShowArchiveConfirm(false);
+                setArchiveAck(false);
+                return;
+            }
+            handleClose();
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [mounted, showDeleteConfirm, showArchiveConfirm, handleClose]);
 
     if (!mounted) return null;
 
@@ -281,8 +305,14 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
         handleClose();
     };
 
-    const handleEnd = () => {
+    const handleDelete = () => {
         if (habitToEdit) onDelete(habitToEdit.id);
+    };
+
+    const handleArchiveEnd = () => {
+        if (!habitToEdit) return;
+        onUpdate(habitToEdit.id, { recurrenceEnd: `${todayISO}T00:00:00Z` });
+        handleClose();
     };
 
     const SelectedIcon = icon ? HABIT_ICONS[icon] : null;
@@ -435,47 +465,98 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
                     {isEdit && (
                         <div className="danger-zone">
                             <div className="danger-divider" />
-                            {!showEndConfirm ? (
+                            <h3 className="danger-zone-title">Danger Zone</h3>
+                            <p className="danger-zone-desc">
+                                Irreversible actions for this habit.
+                            </p>
+
+                            {!showArchiveConfirm ? (
                                 <div className="end-habit-row">
                                     <button
                                         type="button"
                                         className="btn-end-habit"
-                                        onClick={() => setShowEndConfirm(true)}
+                                        onClick={() => setShowArchiveConfirm(true)}
                                     >
                                         End Habit
                                     </button>
                                     <span className="end-habit-hint">
-                                        Mark this habit as complete — whether it's a new habit you've built or a bad one you've curbed.
+                                        End this habit today. It will be moved to Archived and won't appear in future dates.
                                     </span>
                                 </div>
                             ) : (
                                 <div className="end-confirm">
                                     <p className="end-confirm-warning">
-                                        ⚠️ This will permanently remove the habit and all its history.
+                                        ⚠️ End this habit now? This keeps history but archives it going forward.
                                     </p>
                                     <label className="end-confirm-ack">
                                         <input
                                             type="checkbox"
-                                            checked={endAck}
-                                            onChange={e => setEndAck(e.target.checked)}
+                                            checked={archiveAck}
+                                            onChange={e => setArchiveAck(e.target.checked)}
                                         />
-                                        I understand — remove it permanently
+                                        I understand — end this habit and move it to Archived
                                     </label>
                                     <div className="end-confirm-actions">
                                         <button
                                             type="button"
                                             className="btn-end-cancel"
-                                            onClick={() => { setShowEndConfirm(false); setEndAck(false); }}
+                                            onClick={() => { setShowArchiveConfirm(false); setArchiveAck(false); }}
                                         >
                                             Cancel
                                         </button>
                                         <button
                                             type="button"
                                             className="btn-end-confirm"
-                                            disabled={!endAck}
-                                            onClick={handleEnd}
+                                            disabled={!archiveAck}
+                                            onClick={handleArchiveEnd}
                                         >
                                             End Habit
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {!showDeleteConfirm ? (
+                                <div className="end-habit-row delete-habit-row">
+                                    <button
+                                        type="button"
+                                        className="btn-delete-habit"
+                                        onClick={() => setShowDeleteConfirm(true)}
+                                    >
+                                        Delete Habit
+                                    </button>
+                                    <span className="end-habit-hint">
+                                        Permanently deletes this habit and all of its history.
+                                    </span>
+                                </div>
+                            ) : (
+                                <div className="end-confirm delete-confirm">
+                                    <p className="end-confirm-warning">
+                                        ⚠️ This will permanently remove this habit and all logs.
+                                    </p>
+                                    <label className="end-confirm-ack">
+                                        <input
+                                            type="checkbox"
+                                            checked={deleteAck}
+                                            onChange={e => setDeleteAck(e.target.checked)}
+                                        />
+                                        I understand — permanently delete this habit
+                                    </label>
+                                    <div className="end-confirm-actions">
+                                        <button
+                                            type="button"
+                                            className="btn-end-cancel"
+                                            onClick={() => { setShowDeleteConfirm(false); setDeleteAck(false); }}
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="btn-delete-confirm"
+                                            disabled={!deleteAck}
+                                            onClick={handleDelete}
+                                        >
+                                            Delete Habit
                                         </button>
                                     </div>
                                 </div>

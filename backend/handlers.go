@@ -265,6 +265,27 @@ func getHabits(c *gin.Context) {
 	var habits []Habit
 	db.Where("user_id = ?", user.ID).Order("created_at asc").Find(&habits)
 
+	// For daily view, allow streak visuals to reflect future-dated logs.
+	// Map habit_id -> max logged date so fiery state remains consistent after future logs.
+	maxLoggedByHabit := map[uint]time.Time{}
+	if view == "daily" && len(habits) > 0 {
+		type maxLogRow struct {
+			HabitID    uint      `gorm:"column:habit_id"`
+			MaxLogDate time.Time `gorm:"column:max_log_date"`
+		}
+		var maxRows []maxLogRow
+		db.Model(&HabitLog{}).
+			Select("habit_id, MAX(log_date) AS max_log_date").
+			Where("user_id = ?", user.ID).
+			Group("habit_id").
+			Scan(&maxRows)
+		for _, row := range maxRows {
+			if !row.MaxLogDate.IsZero() {
+				maxLoggedByHabit[row.HabitID] = row.MaxLogDate.UTC().Truncate(24 * time.Hour)
+			}
+		}
+	}
+
 	// Load all non-frozen logs for this user on targetDate in one query
 	var logs []HabitLog
 	db.Where("user_id = ? AND log_date = ? AND was_frozen = false", user.ID, targetDate).Find(&logs)
@@ -278,14 +299,21 @@ func getHabits(c *gin.Context) {
 	result := make([]HabitResponse, 0, len(habits))
 	for _, h := range habits {
 		if view == "daily" || view == "calendar" {
-			if !containsDay(h.Recurrence, todayKey) {
-				continue
-			}
-			if h.RecurrenceEnd != nil && targetDate.After(h.RecurrenceEnd.UTC().Truncate(24*time.Hour)) {
+			endedBeforeTarget := h.RecurrenceEnd != nil &&
+				targetDate.After(h.RecurrenceEnd.UTC().Truncate(24*time.Hour))
+
+			// Keep ended habits visible so UI can place them in Archived
+			// instead of dropping them from the date view entirely.
+			if !endedBeforeTarget && !containsDay(h.Recurrence, todayKey) {
 				continue
 			}
 		}
-		streak, hasFreeze := computeStreak(h, user.ID, targetDate)
+		streakRefDate := targetDate
+		if maxDate, ok := maxLoggedByHabit[h.ID]; ok && maxDate.After(streakRefDate) {
+			streakRefDate = maxDate
+		}
+
+		streak, hasFreeze := computeStreak(h, user.ID, streakRefDate)
 		result = append(result, habitToResponse(h, completedIDs[h.ID], streak, hasFreeze))
 	}
 

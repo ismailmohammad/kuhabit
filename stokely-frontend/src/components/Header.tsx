@@ -142,6 +142,7 @@ const Header = () => {
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const onDashboardRoute = location.pathname === '/dashboard' || location.pathname.startsWith('/dashboard/');
 
     useEffect(() => {
         const handler = (e: MouseEvent) => {
@@ -178,7 +179,7 @@ const Header = () => {
                 <NavActions>
                     {userInfo ? (
                         <>
-                            {location.pathname !== '/dashboard' && (
+                            {!onDashboardRoute && (
                                 <Link to="/dashboard"><NavBtn>Dashboard</NavBtn></Link>
                             )}
                             <DropdownWrap ref={dropdownRef}>

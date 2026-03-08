@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { HabitType } from '../../types/habit';
 import { HABIT_ICONS } from '../../utils/habitIcons';
 import {
@@ -36,6 +36,7 @@ function Habit({ habitData, imgSrc, onToggleComplete, onEdit }: HabitProps) {
     const [glowActive, setGlowActive] = useState(false);
     const [surge, setSurge] = useState(false);
     const [showEmbers, setShowEmbers] = useState(false);
+    const completeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const isStreaking = habitData.streak >= 2;
     const glowColor = habitData.positiveType ? 'green' : 'red';
@@ -61,12 +62,27 @@ function Habit({ habitData, imgSrc, onToggleComplete, onEdit }: HabitProps) {
         }
     }, [showEmbers]);
 
+    useEffect(() => {
+        return () => {
+            if (completeTimerRef.current) {
+                clearTimeout(completeTimerRef.current);
+                completeTimerRef.current = null;
+            }
+        };
+    }, []);
+
     const handleClick = () => {
-        // Fire animation when completing any habit that has a streak (creating or extending one)
+        // Play fire FX first, then toggle, so rerenders don't cut off the effect.
         if (!habitData.complete && habitData.streak >= 1) {
             setSurge(true);
             setShowEmbers(true);
             setGlowActive(true);
+            if (completeTimerRef.current) clearTimeout(completeTimerRef.current);
+            completeTimerRef.current = setTimeout(() => {
+                onToggleComplete(habitData);
+                completeTimerRef.current = null;
+            }, 320);
+            return;
         }
         onToggleComplete(habitData);
     };

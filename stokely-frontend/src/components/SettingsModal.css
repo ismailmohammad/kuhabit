@@ -1,3 +1,15 @@
+.settings-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    padding: 1rem;
+    box-sizing: border-box;
+}
+
 .settings-modal-box {
     background: #1e1e1e;
     border: 1px solid #333;
@@ -8,6 +20,27 @@
     max-height: 90vh;
     overflow-y: auto;
     box-sizing: border-box;
+    scrollbar-width: thin;
+    scrollbar-color: #444 #1a1a1a;
+}
+
+.settings-modal-box::-webkit-scrollbar {
+    width: 10px;
+}
+
+.settings-modal-box::-webkit-scrollbar-track {
+    background: #171717;
+    border-radius: 999px;
+}
+
+.settings-modal-box::-webkit-scrollbar-thumb {
+    background: #3a3a3a;
+    border: 2px solid #171717;
+    border-radius: 999px;
+}
+
+.settings-modal-box::-webkit-scrollbar-thumb:hover {
+    background: #555;
 }
 
 .settings-modal-header {

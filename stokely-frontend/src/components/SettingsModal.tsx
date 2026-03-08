@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -74,8 +74,16 @@ export default function SettingsModal({ onClose }: Props) {
         }
     };
 
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [onClose]);
+
     return (
-        <div className="modal-overlay" onClick={onClose}>
+        <div className="settings-modal-overlay" onClick={onClose}>
             <div className="settings-modal-box" onClick={e => e.stopPropagation()}>
                 <div className="settings-modal-header">
                     <h2>Settings</h2>
