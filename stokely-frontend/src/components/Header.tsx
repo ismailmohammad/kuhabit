@@ -6,6 +6,8 @@ import { clearUserInfo } from "../redux/userSlice";
 import { api } from "../api/api";
 import toast from "react-hot-toast";
 import type { RootState } from "../redux/store";
+import { useState, useEffect, useRef } from "react";
+import SettingsModal from "./SettingsModal";
 
 const AppHeader = styled.header`
     display: flex;
@@ -102,20 +104,56 @@ const PrimaryBtn = styled(NavBtn)`
     }
 `;
 
-const UserLabel = styled.span`
-    color: #aaa;
-    font-size: 0.85rem;
-    @media (max-width: 480px) {
-        display: none;
-    }
+const DropdownWrap = styled.div`
+    position: relative;
+`;
+
+const DropdownMenu = styled.div`
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    background: #1e1e1e;
+    border: 1px solid #333;
+    border-radius: 8px;
+    min-width: 140px;
+    z-index: 300;
+    overflow: hidden;
+`;
+
+const DropdownItem = styled.button`
+    display: block;
+    width: 100%;
+    background: none;
+    border: none;
+    color: white;
+    text-align: left;
+    padding: 0.6rem 1rem;
+    font-size: 0.9rem;
+    cursor: pointer;
+    &:hover { background: #2a2a2a; }
+    &:not(:last-child) { border-bottom: 1px solid #2a2a2a; }
 `;
 
 const Header = () => {
     const dispatch = useDispatch();
     const navigate = useNavigate();
     const userInfo = useSelector((state: RootState) => state.user.userInfo);
+    const [dropdownOpen, setDropdownOpen] = useState(false);
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handler = (e: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+                setDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, []);
 
     const handleLogout = async () => {
+        setDropdownOpen(false);
         try {
             await api.auth.logout();
         } catch {
@@ -127,29 +165,44 @@ const Header = () => {
     };
 
     return (
-        <AppHeader>
-            <Link to="/" style={{ textDecoration: "none" }}>
-                <LogoContainer>
-                    <Logo alt="Stokely Logo" src={LogoImage} />
-                    <Title>Stokely</Title>
-                </LogoContainer>
-            </Link>
+        <>
+            <AppHeader>
+                <Link to="/" style={{ textDecoration: "none" }}>
+                    <LogoContainer>
+                        <Logo alt="Stokely Logo" src={LogoImage} />
+                        <Title>Stokely</Title>
+                    </LogoContainer>
+                </Link>
 
-            <NavActions>
-                {userInfo ? (
-                    <>
-                        <UserLabel>@{userInfo.username}</UserLabel>
-                        <Link to="/dashboard"><NavBtn>Dashboard</NavBtn></Link>
-                        <NavBtn onClick={handleLogout}>Log out</NavBtn>
-                    </>
-                ) : (
-                    <>
-                        <Link to="/login"><NavBtn>Sign In</NavBtn></Link>
-                        <Link to="/register"><PrimaryBtn>Get Started</PrimaryBtn></Link>
-                    </>
-                )}
-            </NavActions>
-        </AppHeader>
+                <NavActions>
+                    {userInfo ? (
+                        <>
+                            <Link to="/dashboard"><NavBtn>Dashboard</NavBtn></Link>
+                            <DropdownWrap ref={dropdownRef}>
+                                <NavBtn onClick={() => setDropdownOpen(p => !p)}>
+                                    @{userInfo.username} ▾
+                                </NavBtn>
+                                {dropdownOpen && (
+                                    <DropdownMenu>
+                                        <DropdownItem onClick={() => { setSettingsOpen(true); setDropdownOpen(false); }}>
+                                            Settings
+                                        </DropdownItem>
+                                        <DropdownItem onClick={handleLogout}>Log out</DropdownItem>
+                                    </DropdownMenu>
+                                )}
+                            </DropdownWrap>
+                        </>
+                    ) : (
+                        <>
+                            <Link to="/login"><NavBtn>Sign In</NavBtn></Link>
+                            <Link to="/register"><PrimaryBtn>Get Started</PrimaryBtn></Link>
+                        </>
+                    )}
+                </NavActions>
+            </AppHeader>
+
+            {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+        </>
     );
 };
 

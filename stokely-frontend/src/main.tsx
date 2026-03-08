@@ -30,7 +30,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <Provider store={store}>
     <React.StrictMode>
       <Toaster
-        position="top-right"
+        position="bottom-left"
         toastOptions={{
           style: { background: '#1e1e1e', color: '#fff', border: '1px solid #333' },
         }}

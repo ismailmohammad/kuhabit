@@ -168,6 +168,10 @@ export default function Dashboard() {
 
     const handleToggleComplete = async (habit: HabitType) => {
         const next = !habit.complete;
+        if (habit.complete) {
+            const confirmed = window.confirm(`Revert "${habit.name}" as incomplete?`);
+            if (!confirmed) return;
+        }
         setHabits(prev => prev.map(h => h.id === habit.id ? { ...h, complete: next } : h));
         try {
             await api.habits.update(habit.id, { complete: next });
