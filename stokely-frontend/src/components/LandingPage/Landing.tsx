@@ -1,14 +1,14 @@
-import React, { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import styled, { css, keyframes } from "styled-components";
 import Mockup from '../../assets/mockups.png';
 import { Link } from "react-router-dom";
 
 import toast from "react-hot-toast";
 import {
-    Flame,
-    Ban,
-    CalendarDays,
-    Shield
+  Flame,
+  Ban,
+  CalendarDays,
+  Shield
 } from "lucide-react";
 
 import CubeGreen from '../../assets/cube-logo-green.png';
@@ -150,13 +150,13 @@ const ScreenGlow = styled.div<{ $color: "green" | "red"; $active: boolean }>`
     radial-gradient(circle at center,
       rgba(0, 0, 0, 0) 58%,
       ${p =>
-        p.$color === "green"
-            ? "rgba(45, 202, 142, 0.12) 78%, rgba(45, 202, 142, 0.22) 100%"
-            : "rgba(255, 90, 60, 0.12) 78%, rgba(255, 90, 60, 0.22) 100%"});
+    p.$color === "green"
+      ? "rgba(45, 202, 142, 0.12) 78%, rgba(45, 202, 142, 0.22) 100%"
+      : "rgba(255, 90, 60, 0.12) 78%, rgba(255, 90, 60, 0.22) 100%"});
 
   ${p =>
-        p.$active &&
-        css`
+    p.$active &&
+    css`
       animation: ${screenGlowPulse} 700ms ease-out forwards;
     `}
 
@@ -269,24 +269,6 @@ const flameFlicker = keyframes`
   }
 `;
 
-const emberFade = keyframes`
-  0% {
-    transform: translateX(-50%) translateY(8px) scale(0.9);
-    opacity: 0;
-    filter: brightness(1.2) blur(0px);
-  }
-
-  40% {
-    opacity: 0.45;
-    filter: brightness(1.4) blur(0.5px);
-  }
-
-  100% {
-    transform: translateX(-50%) translateY(-8px) scale(1.1);
-    opacity: 0;
-    filter: brightness(1.8) blur(2px);
-  }
-`;
 
 const emberRise1 = keyframes`
   0% {
@@ -380,9 +362,9 @@ const EmberParticle = styled.span<{ $variant: 1 | 2 | 3 | 4 | 5; $color: "green"
   z-index: 3;
 
   background: ${p =>
-        p.$color === "green"
-            ? "radial-gradient(circle, rgba(200,255,230,1) 0%, rgba(45,202,142,1) 40%, rgba(45,202,142,0) 100%)"
-            : "radial-gradient(circle, rgba(255,220,170,1) 0%, rgba(255,90,60,1) 40%, rgba(255,90,60,0) 100%)"};
+    p.$color === "green"
+      ? "radial-gradient(circle, rgba(200,255,230,1) 0%, rgba(45,202,142,1) 40%, rgba(45,202,142,0) 100%)"
+      : "radial-gradient(circle, rgba(255,220,170,1) 0%, rgba(255,90,60,1) 40%, rgba(255,90,60,0) 100%)"};
   animation-duration: ${() => 0.7 + Math.random() * 0.3}s;
   filter:
     blur(1px)
@@ -391,15 +373,15 @@ const EmberParticle = styled.span<{ $variant: 1 | 2 | 3 | 4 | 5; $color: "green"
     drop-shadow(0 0 26px rgba(255,140,60,0.65))
     drop-shadow(0 0 42px rgba(255,140,60,0.4));
   animation: ${p =>
-        p.$variant === 1
-            ? emberRise1
-            : p.$variant === 2
-                ? emberRise2
-                : p.$variant === 3
-                    ? emberRise3
-                    : p.$variant === 4
-                        ? emberRise4
-                        : emberRise5}
+    p.$variant === 1
+      ? emberRise1
+      : p.$variant === 2
+        ? emberRise2
+        : p.$variant === 3
+          ? emberRise3
+          : p.$variant === 4
+            ? emberRise4
+            : emberRise5}
     0.8s ease-out forwards;
 `;
 
@@ -434,8 +416,8 @@ const FireSurgeWrap = styled.div<{ $surge?: boolean }>`
   transform-origin: 50% 85%;
 
   ${p =>
-        p.$surge &&
-        css`
+    p.$surge &&
+    css`
       animation: ${fireSurge} 0.45s ease-out;
     `}
 `;
@@ -501,14 +483,6 @@ const StreakText = styled.p`
     margin: 0;
 `;
 
-const SectionSub = styled.p`
-    text-align: center;
-    color: #aaa;
-    font-size: 1rem;
-    max-width: 520px;
-    margin: 0 auto 2rem;
-    line-height: 1.6;
-`;
 
 // ── Tower ─────────────────────────────────────────────────────────────────────
 
@@ -537,55 +511,41 @@ const TowerCube = styled.img<{ $delay: number }>`
 `;
 
 const TOWER_ROWS = [
-    [
-        { src: CubeGreen, delay: 0, offset: 0 },
-        { src: CubeRed, delay: 0.5, offset: 0 },
-        { src: CubeGreen, delay: 0.2, offset: 0 },
-    ],
-    [
-        { src: CubeGreenRight, delay: 0.25, offset: 0 },
-        { src: CubeRedTop, delay: 1.0, offset: 0 },
-    ],
-    [
-        { src: CubeGreenTop, delay: 0.75, offset: 0 },
-    ]
+  [
+    { src: CubeGreen, delay: 0, offset: 0 },
+    { src: CubeRed, delay: 0.5, offset: 0 },
+    { src: CubeGreen, delay: 0.2, offset: 0 },
+  ],
+  [
+    { src: CubeGreenRight, delay: 0.25, offset: 0 },
+    { src: CubeRedTop, delay: 1.0, offset: 0 },
+  ],
+  [
+    { src: CubeGreenTop, delay: 0.75, offset: 0 },
+  ]
 ];
 
 function CubeTower() {
-    return (
-        <TowerWrap>
-            {TOWER_ROWS.map((row, rowIndex) => (
-                <TowerRow key={rowIndex}>
-                    {row.map((cube, i) => (
-                        <TowerCube
-                            key={i}
-                            src={cube.src}
-                            alt=""
-                            $delay={cube.delay}
-                        />
-                    ))}
-                </TowerRow>
-            ))}
-        </TowerWrap>
-    );
+  return (
+    <TowerWrap>
+      {TOWER_ROWS.map((row, rowIndex) => (
+        <TowerRow key={rowIndex}>
+          {row.map((cube, i) => (
+            <TowerCube
+              key={i}
+              src={cube.src}
+              alt=""
+              $delay={cube.delay}
+            />
+          ))}
+        </TowerRow>
+      ))}
+    </TowerWrap>
+  );
 }
 
 // ── Layout ────────────────────────────────────────────────────────────────────
 
-const Reveal = styled.div<{ $visible: boolean }>`
-  opacity: ${p => (p.$visible ? 1 : 0)};
-  transform: translateY(${p => (p.$visible ? "0" : "24px")});
-  transition:
-    opacity 0.6s ease,
-    transform 0.6s ease;
-  will-change: opacity, transform;
-
-  @media (prefers-reduced-motion: reduce) {
-    opacity: 1;
-    transform: none;
-    transition: none;
-  }
-`;
 
 const SectionHeadline = styled.h2`
     font-size: clamp(1.8rem, 4vw, 2.6rem);
@@ -624,47 +584,47 @@ const LazySectionWrap = styled.div<{ $visible: boolean }>`
 `;
 
 function LazySection({
-    children,
-    threshold = 0.15,
-    rootMargin = "0px 0px -10% 0px",
-    onReveal,
+  children,
+  threshold = 0.15,
+  rootMargin = "0px 0px -10% 0px",
+  onReveal,
 }: {
-    children: ReactNode;
-    threshold?: number;
-    rootMargin?: string;
-    onReveal?: () => void;
+  children: ReactNode;
+  threshold?: number;
+  rootMargin?: string;
+  onReveal?: () => void;
 }) {
-    const ref = useRef<HTMLDivElement | null>(null);
-    const [visible, setVisible] = useState(false);
-    const hasRevealedRef = useRef(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [visible, setVisible] = useState(false);
+  const hasRevealedRef = useRef(false);
 
-    useEffect(() => {
-        const node = ref.current;
-        if (!node) return;
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
 
-        const observer = new IntersectionObserver(
-            entries => {
-                const entry = entries[0];
-                if (entry?.isIntersecting && !hasRevealedRef.current) {
-                    hasRevealedRef.current = true;
-                    setVisible(true);
-                    onReveal?.();
-                    observer.unobserve(node);
-                }
-            },
-            { threshold, rootMargin }
-        );
-
-        observer.observe(node);
-
-        return () => observer.disconnect();
-    }, [threshold, rootMargin, onReveal]);
-
-    return (
-        <LazySectionWrap ref={ref} $visible={visible}>
-            {children}
-        </LazySectionWrap>
+    const observer = new IntersectionObserver(
+      entries => {
+        const entry = entries[0];
+        if (entry?.isIntersecting && !hasRevealedRef.current) {
+          hasRevealedRef.current = true;
+          setVisible(true);
+          onReveal?.();
+          observer.unobserve(node);
+        }
+      },
+      { threshold, rootMargin }
     );
+
+    observer.observe(node);
+
+    return () => observer.disconnect();
+  }, [threshold, rootMargin, onReveal]);
+
+  return (
+    <LazySectionWrap ref={ref} $visible={visible}>
+      {children}
+    </LazySectionWrap>
+  );
 }
 
 const Page = styled.div`
@@ -710,8 +670,8 @@ const HeroTitleStage = styled.span<{ $visible: boolean; $absolute?: boolean }>`
   transition: opacity 0.6s ease, transform 0.6s ease;
 
   ${p =>
-        p.$absolute &&
-        css`
+    p.$absolute &&
+    css`
       position: absolute;
       inset: 0;
     `}
@@ -866,288 +826,291 @@ const HERO_LINE_2 = "Stoke Your Momentum.";
 const HERO_FULL_TEXT = `${HERO_LINE_1}\n${HERO_LINE_2}`;
 
 export default function Landing() {
-    const [greenLogs, setGreenLogs] = useState<{ id: number }[]>([]);
-    const [redLogs, setRedLogs] = useState<{ id: number }[]>([]);
-    const [greenSurge, setGreenSurge] = useState(false);
-    const [redSurge, setRedSurge] = useState(false);
+  const [greenLogs, setGreenLogs] = useState<{ id: number }[]>([]);
+  const [redLogs, setRedLogs] = useState<{ id: number }[]>([]);
+  const [greenSurge, setGreenSurge] = useState(false);
+  const [redSurge, setRedSurge] = useState(false);
 
-    const greenLogCooldownRef = useRef(false);
-    const redLogCooldownRef = useRef(false);
 
-    // FOr cursor glove
-    const [showGreenHint, setShowGreenHint] = useState(false);
-    const [showRedHint, setShowRedHint] = useState(false);
 
-    // For Screen glow on logs added:
-    const [greenScreenGlow, setGreenScreenGlow] = useState(false);
-    const [redScreenGlow, setRedScreenGlow] = useState(false);
+  // FOr cursor glove
+  const [showGreenHint, setShowGreenHint] = useState(false);
+  const [showRedHint, setShowRedHint] = useState(false);
 
-    function triggerScreenGlow(color: "green" | "red") {
-        const setGlow = color === "green" ? setGreenScreenGlow : setRedScreenGlow;
+  // For Screen glow on logs added:
+  const [greenScreenGlow, setGreenScreenGlow] = useState(false);
+  const [redScreenGlow, setRedScreenGlow] = useState(false);
 
-        setGlow(false);
+  function triggerScreenGlow(color: "green" | "red") {
+    const setGlow = color === "green" ? setGreenScreenGlow : setRedScreenGlow;
 
-        requestAnimationFrame(() => {
-            setGlow(true);
-        });
+    setGlow(false);
 
-        setTimeout(() => {
-            setGlow(false);
-        }, 700);
+    requestAnimationFrame(() => {
+      setGlow(true);
+    });
+
+    setTimeout(() => {
+      setGlow(false);
+    }, 700);
+  }
+
+  const LOG_DURATION = 900;
+
+  function addLog(type: "green" | "red", withGlow = true) {
+    const setLogs = type === "green" ? setGreenLogs : setRedLogs;
+    const setSurge = type === "green" ? setGreenSurge : setRedSurge;
+
+    const id = Date.now() + Math.random();
+
+    setLogs(prev => {
+      if (prev.length >= 2) return prev;
+      return [...prev, { id }];
+    });
+
+    setSurge(true);
+
+    if (withGlow) {
+      triggerScreenGlow(type);
+      toast("Momentum Stoked! Sign in or Get Started for free to make it count.", {
+        id: "streak-toast",
+        icon: "🔥",
+        position: "top-left",
+        style: {
+          marginTop: "70px"
+        }
+      });
     }
 
-    const LOG_DURATION = 900;
+    setTimeout(() => {
+      setSurge(false);
+    }, 400);
 
-    function addLog(type: "green" | "red", withGlow = true) {
-        const setLogs = type === "green" ? setGreenLogs : setRedLogs;
-        const setSurge = type === "green" ? setGreenSurge : setRedSurge;
+    setTimeout(() => {
+      setLogs(prev => prev.filter(log => log.id !== id));
+    }, LOG_DURATION);
+  }
 
-        const id = Date.now() + Math.random();
+  // Typewriter
 
-        setLogs(prev => {
-            if (prev.length >= 2) return prev;
-            return [...prev, { id }];
-        });
+  const [typedCount, setTypedCount] = useState(0);
+  const [heroSettled, setHeroSettled] = useState(false);
+  const [heroTransitioning, setHeroTransitioning] = useState(false);
 
-        setSurge(true);
+  const typingSpeed = 55;
+  const settleDelay = 450;
 
-        if (withGlow) {
-            triggerScreenGlow(type);
-            toast("Momentum Stoked! Sign in or Get Started for free to make it count.", {
-                id: "streak-toast",
-                icon: "🔥"
-            });
-        }
+  useEffect(() => {
+    if (heroSettled) return;
 
-        setTimeout(() => {
-            setSurge(false);
-        }, 400);
+    if (typedCount < HERO_FULL_TEXT.length) {
+      const timeout = setTimeout(() => {
+        setTypedCount(prev => prev + 1);
+      }, typingSpeed);
 
-        setTimeout(() => {
-            setLogs(prev => prev.filter(log => log.id !== id));
-        }, LOG_DURATION);
+      return () => clearTimeout(timeout);
     }
 
-    // Typewriter
+    const transitionTimeout = setTimeout(() => {
+      setHeroTransitioning(true);
+    }, settleDelay);
 
-    const [typedCount, setTypedCount] = useState(0);
-    const [heroSettled, setHeroSettled] = useState(false);
-    const [heroTransitioning, setHeroTransitioning] = useState(false);
+    const settleTimeout = setTimeout(() => {
+      setHeroSettled(true);
+    }, settleDelay + 500);
 
-    const typingSpeed = 55;
-    const settleDelay = 450;
+    return () => {
+      clearTimeout(transitionTimeout);
+      clearTimeout(settleTimeout);
+    };
+  }, [typedCount, heroSettled]);
 
-    useEffect(() => {
-        if (heroSettled) return;
+  const typedHeroText = useMemo(
+    () => HERO_FULL_TEXT.slice(0, typedCount),
+    [typedCount]
+  );
 
-        if (typedCount < HERO_FULL_TEXT.length) {
-            const timeout = setTimeout(() => {
-                setTypedCount(prev => prev + 1);
-            }, typingSpeed);
+  return (
+    <>
+      <ScreenGlow $color="green" $active={greenScreenGlow} />
+      <ScreenGlow $color="red" $active={redScreenGlow} />
 
-            return () => clearTimeout(timeout);
-        }
+      <Page>
+        <Hero>
+          <HeroTitle aria-label="Build your Streaks, Stoke Your Momentum.">
+            <HeroTitleStage $visible={!heroTransitioning && !heroSettled}>
+              <HeroTitleInner>
+                <TypewriterWrap>
+                  {typedHeroText.split("").map((char, index) => {
+                    if (char === "\n") {
+                      return <HeroTitleBreak key={`br-${index}`} />;
+                    }
 
-        const transitionTimeout = setTimeout(() => {
-            setHeroTransitioning(true);
-        }, settleDelay);
+                    return (
+                      <TypeChar key={`${char}-${index}`} $index={index}>
+                        {char === " " ? "\u00A0" : char}
+                      </TypeChar>
+                    );
+                  })}
+                  {typedCount < HERO_FULL_TEXT.length && <Caret>|</Caret>}
+                </TypewriterWrap>
+              </HeroTitleInner>
+            </HeroTitleStage>
 
-        const settleTimeout = setTimeout(() => {
-            setHeroSettled(true);
-        }, settleDelay + 500);
-
-        return () => {
-            clearTimeout(transitionTimeout);
-            clearTimeout(settleTimeout);
-        };
-    }, [typedCount, heroSettled]);
-
-    const typedHeroText = useMemo(
-        () => HERO_FULL_TEXT.slice(0, typedCount),
-        [typedCount]
-    );
-
-    return (
-        <>
-            <ScreenGlow $color="green" $active={greenScreenGlow} />
-            <ScreenGlow $color="red" $active={redScreenGlow} />
-
-            <Page>
-                <Hero>
-                    <HeroTitle aria-label="Build your Streaks, Stoke Your Momentum.">
-                        <HeroTitleStage $visible={!heroTransitioning && !heroSettled}>
-                            <HeroTitleInner>
-                                <TypewriterWrap>
-                                    {typedHeroText.split("").map((char, index) => {
-                                        if (char === "\n") {
-                                            return <HeroTitleBreak key={`br-${index}`} />;
-                                        }
-
-                                        return (
-                                            <TypeChar key={`${char}-${index}`} $index={index}>
-                                                {char === " " ? "\u00A0" : char}
-                                            </TypeChar>
-                                        );
-                                    })}
-                                    {typedCount < HERO_FULL_TEXT.length && <Caret>|</Caret>}
-                                </TypewriterWrap>
-                            </HeroTitleInner>
-                        </HeroTitleStage>
-
-                        <HeroTitleStage $visible={heroTransitioning || heroSettled} $absolute>
-                            <HeroTitleInner>
-                                <HeroTitleStaticLine>
-                                    <Highlight>Build</Highlight> your Streaks,
-                                </HeroTitleStaticLine>
-                                <HeroTitleBreak />
-                                <HeroTitleStaticLine>
-                                    <FireHighlight>Stoke</FireHighlight> Your Momentum.
-                                </HeroTitleStaticLine>
-                            </HeroTitleInner>
-                        </HeroTitleStage>
-                    </HeroTitle>
-                    <HeroSub>
-                        A simple, privacy-first habit tracker. Build better habits, curb the bad ones — your data stays yours.
-                    </HeroSub>
-                    <CubeTower />
-                    <HeroActions>
-                        <PrimaryBtn to="/register">Get Stoked for Stokely! — It's Free</PrimaryBtn>
-                        <SecondaryBtn to="/login">Sign In</SecondaryBtn>
-                    </HeroActions>
-                </Hero>
+            <HeroTitleStage $visible={heroTransitioning || heroSettled} $absolute>
+              <HeroTitleInner>
+                <HeroTitleStaticLine>
+                  <Highlight>Build</Highlight> your Streaks,
+                </HeroTitleStaticLine>
+                <HeroTitleBreak />
+                <HeroTitleStaticLine>
+                  <FireHighlight>Stoke</FireHighlight> Your Momentum.
+                </HeroTitleStaticLine>
+              </HeroTitleInner>
+            </HeroTitleStage>
+          </HeroTitle>
+          <HeroSub>
+            A simple, privacy-first habit tracker. Build better habits, curb the bad ones — your data stays yours.
+          </HeroSub>
+          <CubeTower />
+          <HeroActions>
+            <PrimaryBtn to="/register">Get Stoked for Stokely! — It's Free</PrimaryBtn>
+            <SecondaryBtn to="/login">Sign In</SecondaryBtn>
+          </HeroActions>
+        </Hero>
 
 
 
-                <LazySection
-                    onReveal={() => {
-                        setTimeout(() => setShowGreenHint(true), 180);
-                        setTimeout(() => addLog("green", false), 350);
-                        setTimeout(() => setShowGreenHint(false), 1700);
+        <LazySection
+          onReveal={() => {
+            setTimeout(() => setShowGreenHint(true), 180);
+            setTimeout(() => addLog("green", false), 350);
+            setTimeout(() => setShowGreenHint(false), 1700);
 
-                        setTimeout(() => setShowRedHint(true), 420);
-                        setTimeout(() => addLog("red", false), 650);
-                        setTimeout(() => setShowRedHint(false), 1950);
-                    }}
-                >
-                    <StreakSection>
-                        <SectionHeadline>
-                            Feed your streak with daily actions and watch your motivation grow.
-                        </SectionHeadline>
+            setTimeout(() => setShowRedHint(true), 420);
+            setTimeout(() => addLog("red", false), 650);
+            setTimeout(() => setShowRedHint(false), 1950);
+          }}
+        >
+          <StreakSection>
+            <SectionHeadline>
+              Feed your streak with daily actions and watch your motivation grow.
+            </SectionHeadline>
 
-                        <StreakGrid>
-                            <StreakCard>
-                                <FlameContainer onClick={() => addLog("green")}>
-                                    {showGreenHint && <CursorHint src={GloveCursor} alt="" aria-hidden="true" />}
-                                    {greenLogs.map(log => (
-                                        <React.Fragment key={log.id}>
-                                            <LogDrop src={GreenLogs} alt="" />
-                                            <EmberBurst>
-                                                <EmberParticle $variant={1} $color="green" />
-                                                <EmberParticle $variant={2} $color="green" />
-                                                <EmberParticle $variant={3} $color="green" />
-                                                <EmberParticle $variant={4} $color="green" />
-                                                <EmberParticle $variant={5} $color="green" />
-                                                <EmberParticle $variant={2} $color="green" />
-                                                <EmberParticle $variant={3} $color="green" />
-                                            </EmberBurst>
-                                        </React.Fragment>
-                                    ))}
-                                    <FireSurgeWrap $surge={greenSurge}>
-                                        <FlamingCube src={FieryGreen} alt="" />
-                                    </FireSurgeWrap>
-                                </FlameContainer>
-                                <StreakTitle>Positive Habit Streaks</StreakTitle>
-                                <StreakText>
-                                    Every time you complete a good habit, your streak grows.
-                                    Keep the green cube burning by showing up consistently.
-                                </StreakText>
-                            </StreakCard>
+            <StreakGrid>
+              <StreakCard>
+                <FlameContainer onClick={() => addLog("green")}>
+                  {showGreenHint && <CursorHint src={GloveCursor} alt="" aria-hidden="true" />}
+                  {greenLogs.map(log => (
+                    <React.Fragment key={log.id}>
+                      <LogDrop src={GreenLogs} alt="" />
+                      <EmberBurst>
+                        <EmberParticle $variant={1} $color="green" />
+                        <EmberParticle $variant={2} $color="green" />
+                        <EmberParticle $variant={3} $color="green" />
+                        <EmberParticle $variant={4} $color="green" />
+                        <EmberParticle $variant={5} $color="green" />
+                        <EmberParticle $variant={2} $color="green" />
+                        <EmberParticle $variant={3} $color="green" />
+                      </EmberBurst>
+                    </React.Fragment>
+                  ))}
+                  <FireSurgeWrap $surge={greenSurge}>
+                    <FlamingCube src={FieryGreen} alt="" />
+                  </FireSurgeWrap>
+                </FlameContainer>
+                <StreakTitle>Positive Habit Streaks</StreakTitle>
+                <StreakText>
+                  Every time you complete a good habit, your streak grows.
+                  Keep the green cube burning by showing up consistently.
+                </StreakText>
+              </StreakCard>
 
-                            <StreakCard>
-                                <FlameContainer onClick={() => addLog("red")}>
-                                    {showRedHint && <CursorHint src={GloveCursor} alt="" aria-hidden="true" />}
-                                    {redLogs.map(log => (
-                                        <React.Fragment key={log.id}>
-                                            <LogDrop src={RedLogs} alt="" />
-                                            <EmberBurst>
-                                                <EmberParticle $variant={1} $color="red" />
-                                                <EmberParticle $variant={2} $color="red" />
-                                                <EmberParticle $variant={3} $color="red" />
-                                                <EmberParticle $variant={4} $color="red" />
-                                                <EmberParticle $variant={5} $color="red" />
-                                                <EmberParticle $variant={2} $color="red" />
-                                                <EmberParticle $variant={3} $color="red" />
-                                            </EmberBurst>
-                                        </React.Fragment>
-                                    ))}
-                                    <FireSurgeWrap $surge={redSurge}>
-                                        <FlamingCube src={FieryRed} alt="" />
-                                    </FireSurgeWrap>
-                                </FlameContainer>
-                                <StreakTitle>Breaking Bad Habits</StreakTitle>
-                                <StreakText>
-                                    The longer you avoid a bad habit, the hotter your streak gets.
-                                    Keep the red cube blazing by staying disciplined.
-                                </StreakText>
-                            </StreakCard>
-                        </StreakGrid>
-                    </StreakSection>
-                </LazySection>
+              <StreakCard>
+                <FlameContainer onClick={() => addLog("red")}>
+                  {showRedHint && <CursorHint src={GloveCursor} alt="" aria-hidden="true" />}
+                  {redLogs.map(log => (
+                    <React.Fragment key={log.id}>
+                      <LogDrop src={RedLogs} alt="" />
+                      <EmberBurst>
+                        <EmberParticle $variant={1} $color="red" />
+                        <EmberParticle $variant={2} $color="red" />
+                        <EmberParticle $variant={3} $color="red" />
+                        <EmberParticle $variant={4} $color="red" />
+                        <EmberParticle $variant={5} $color="red" />
+                        <EmberParticle $variant={2} $color="red" />
+                        <EmberParticle $variant={3} $color="red" />
+                      </EmberBurst>
+                    </React.Fragment>
+                  ))}
+                  <FireSurgeWrap $surge={redSurge}>
+                    <FlamingCube src={FieryRed} alt="" />
+                  </FireSurgeWrap>
+                </FlameContainer>
+                <StreakTitle>Breaking Bad Habits</StreakTitle>
+                <StreakText>
+                  The longer you avoid a bad habit, the hotter your streak gets.
+                  Keep the red cube blazing by staying disciplined.
+                </StreakText>
+              </StreakCard>
+            </StreakGrid>
+          </StreakSection>
+        </LazySection>
 
-                <LazySection>
-                    <FeaturesGrid>
-                        <FeatureCard>
-                            <FeatureIcon>
-                                <Flame color="#ca962d" />
-                            </FeatureIcon>
-                            <FeatureTitle>Build Habits</FeatureTitle>
-                            <FeatureText>Track positive habits you want to reinforce daily or on a custom schedule.</FeatureText>
-                        </FeatureCard>
-                        <FeatureCard>
-                            <FeatureIcon>
-                                <Ban color="#ff6b6b" />
-                            </FeatureIcon>
-                            <FeatureTitle>Curb Habits</FeatureTitle>
-                            <FeatureText>Mark negative habits you're working to eliminate and celebrate your wins.</FeatureText>
-                        </FeatureCard>
-                        <FeatureCard>
-                            <FeatureIcon>
-                                <CalendarDays color="#ffffff" />
-                            </FeatureIcon>
-                            <FeatureTitle>Flexible Recurrence</FeatureTitle>
-                            <FeatureText>Set habits to repeat daily, weekdays, weekends, or any custom combination.</FeatureText>
-                        </FeatureCard>
-                        <FeatureCard>
-                            <FeatureIcon>
-                                <Shield color="#5da8ff" />
-                            </FeatureIcon>
-                            <FeatureTitle>Private by Design</FeatureTitle>
-                            <FeatureText>Your habits are personal. No tracking, no ads, no third-party data sharing.</FeatureText>
-                        </FeatureCard>
-                    </FeaturesGrid>
-                </LazySection>
+        <LazySection>
+          <FeaturesGrid>
+            <FeatureCard>
+              <FeatureIcon>
+                <Flame color="#ca962d" />
+              </FeatureIcon>
+              <FeatureTitle>Build Habits</FeatureTitle>
+              <FeatureText>Track positive habits you want to reinforce daily or on a custom schedule.</FeatureText>
+            </FeatureCard>
+            <FeatureCard>
+              <FeatureIcon>
+                <Ban color="#ff6b6b" />
+              </FeatureIcon>
+              <FeatureTitle>Curb Habits</FeatureTitle>
+              <FeatureText>Mark negative habits you're working to eliminate and celebrate your wins.</FeatureText>
+            </FeatureCard>
+            <FeatureCard>
+              <FeatureIcon>
+                <CalendarDays color="#ffffff" />
+              </FeatureIcon>
+              <FeatureTitle>Flexible Recurrence</FeatureTitle>
+              <FeatureText>Set habits to repeat daily, weekdays, weekends, or any custom combination.</FeatureText>
+            </FeatureCard>
+            <FeatureCard>
+              <FeatureIcon>
+                <Shield color="#5da8ff" />
+              </FeatureIcon>
+              <FeatureTitle>Private by Design</FeatureTitle>
+              <FeatureText>Your habits are personal. No tracking, no ads, no third-party data sharing.</FeatureText>
+            </FeatureCard>
+          </FeaturesGrid>
+        </LazySection>
 
-                <LazySection>
-                    <TwoCol>
-                        <Card>
-                            <CardTitle>Inspired by Atomic Habits</CardTitle>
-                            <CardText>
-                                After reading <BookLink href="https://jamesclear.com/atomic-habits" target="_blank" rel="noopener noreferrer">Atomic Habits</BookLink> by James Clear, I built this tracker to put the book's principles into practice. Over 40–50% of daily actions are habitual — so tracking them matters.
-                            </CardText>
-                            <CardText>
-                                No ads. No data selling. Just a clean tracker for building the life you want.
-                            </CardText>
-                        </Card>
-                        <Card style={{ padding: "1rem" }}>
-                            <CardTitle>Cross Platform Support</CardTitle>
-                            <CardText>
-                                Use the lightweight web interface across any devices you own.
-                            </CardText>
-                            <MockupImage src={Mockup} alt="Stokely app mockup" loading="lazy" />
-                        </Card>
-                    </TwoCol>
-                </LazySection>
-            </Page>
-        </>
-    );
+        <LazySection>
+          <TwoCol>
+            <Card>
+              <CardTitle>Inspired by Atomic Habits</CardTitle>
+              <CardText>
+                After reading <BookLink href="https://jamesclear.com/atomic-habits" target="_blank" rel="noopener noreferrer">Atomic Habits</BookLink> by James Clear, I built this tracker to put the book's principles into practice. Over 40–50% of daily actions are habitual — so tracking them matters.
+              </CardText>
+              <CardText>
+                No ads. No data selling. Just a clean tracker for building the life you want.
+              </CardText>
+            </Card>
+            <Card style={{ padding: "1rem" }}>
+              <CardTitle>Cross Platform Support</CardTitle>
+              <CardText>
+                Use the lightweight web interface across any devices you own.
+              </CardText>
+              <MockupImage src={Mockup} alt="Stokely app mockup" loading="lazy" />
+            </Card>
+          </TwoCol>
+        </LazySection>
+      </Page>
+    </>
+  );
 }

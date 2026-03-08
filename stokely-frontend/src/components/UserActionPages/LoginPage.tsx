@@ -42,7 +42,7 @@ const LoginPage = () => {
                             type="text"
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
-                            placeholder="your_username"
+                            placeholder="Username"
                             required
                             autoComplete="username"
                         />
