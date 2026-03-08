@@ -117,7 +117,7 @@ const Header = () => {
                     </>
                 ) : (
                     <>
-                        <Link to="/login"><NavBtn>Log in</NavBtn></Link>
+                        <Link to="/login"><NavBtn>Sign In</NavBtn></Link>
                         <Link to="/register"><PrimaryBtn>Get Started</PrimaryBtn></Link>
                     </>
                 )}
