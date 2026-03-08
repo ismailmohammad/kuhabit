@@ -1,5 +1,5 @@
 import styled from "styled-components";
-import LogoImage from '../assets/cube-logo-white.png';
+import LogoImage from '../assets/header-logo.png';
 import { Link, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { clearUserInfo } from "../redux/userSlice";
@@ -9,7 +9,11 @@ import type { RootState } from "../redux/store";
 
 const AppHeader = styled.header`
     display: flex;
-    background: #1e1e1e;
+    background: linear-gradient(
+    180deg,
+    #1f1f1f,
+    #1a1a1a
+);
     width: 100%;
     justify-content: space-between;
     align-items: center;
@@ -25,6 +29,11 @@ const LogoContainer = styled.div`
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    transition: transform 0.2s ease;
+
+    &:hover {
+        transform: translateY(-1px);
+    }
 `;
 
 const Logo = styled.img`
@@ -33,13 +42,29 @@ const Logo = styled.img`
     margin: 0.5rem 0;
     object-fit: contain;
     flex-shrink: 0;
-    animation: logo-jiggle infinite 2s linear;
+    transition: transform 0.25s ease, filter 0.25s ease;
+     filter:
+            drop-shadow(0 0 8px rgba(45, 202, 142, 0.35))
+            drop-shadow(0 0 12px rgba(255, 120, 40, 0.22));
+    &:hover {
+        transform: translateY(-1px) scale(1.03);
+       
+    }
 `;
 
 const Title = styled.span`
     font-size: 1.25rem;
-    font-weight: 700;
-    color: white;
+    font-weight: 800;
+
+    background: linear-gradient(
+        90deg,
+        #2dca8e,
+        #42e676,
+        #ffab66
+    );
+
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
 `;
 
 const NavActions = styled.div`
@@ -69,9 +94,11 @@ const PrimaryBtn = styled(NavBtn)`
     color: #111;
     border-color: #2dca8e;
     font-weight: 600;
+
     &:hover {
         background: #25b07b;
         border-color: #25b07b;
+        box-shadow: 0 0 10px rgba(45,202,142,0.35);
     }
 `;
 
@@ -103,8 +130,8 @@ const Header = () => {
         <AppHeader>
             <Link to="/" style={{ textDecoration: "none" }}>
                 <LogoContainer>
-                    <Logo alt="KuHabit Logo" src={LogoImage} />
-                    <Title>KuHabit</Title>
+                    <Logo alt="Stokely Logo" src={LogoImage} />
+                    <Title>Stokely</Title>
                 </LogoContainer>
             </Link>
 

@@ -597,19 +597,13 @@ const SectionHeadline = styled.h2`
 
     background: linear-gradient(
         90deg,
-        #2dca8e,
-        #42e6a4,
-        #7cf29f,
         #ffd166,
         #ff7b72,
-        #ffd166,
-        #7cf29f,
-        #42e6a4,
-        #2dca8e
+        #ffd166
     );
 
     background-size: 300% 100%;
-    animation: ${gradientShift} 10s linear infinite;
+    // animation: ${gradientShift} 10s linear infinite;
 
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -701,7 +695,35 @@ const Highlight = styled.span`
   -webkit-text-fill-color: transparent;
 `;
 
+const FireHighlight = styled(Highlight)`
+  background: none;
+  -webkit-background-clip: initial;
+  -webkit-text-fill-color: initial;
+  color: #e69f42;
+  text-shadow: 0 0 10px rgba(202, 89, 45, 0.35);
+`;
+
+const HeroTitleStage = styled.span<{ $visible: boolean; $absolute?: boolean }>`
+  display: block;
+  opacity: ${p => (p.$visible ? 1 : 0)};
+  transform: translateY(${p => (p.$visible ? "0" : "6px")});
+  transition: opacity 0.6s ease, transform 0.6s ease;
+
+  ${p =>
+        p.$absolute &&
+        css`
+      position: absolute;
+      inset: 0;
+    `}
+`;
+
+const HeroTitleInner = styled.span`
+  display: inline-block;
+  width: 100%;
+`;
+
 const HeroTitle = styled.h1`
+    position: relative;
     font-size: clamp(2rem, 6vw, 3.5rem);
     font-weight: 800;
     color: white;
@@ -839,8 +861,8 @@ const FeatureText = styled.p`
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-const HERO_LINE_1 = "Queue Your Habits,";
-const HERO_LINE_2 = "Cue Your Habits";
+const HERO_LINE_1 = "Build your Streaks,";
+const HERO_LINE_2 = "Stoke Your Momentum.";
 const HERO_FULL_TEXT = `${HERO_LINE_1}\n${HERO_LINE_2}`;
 
 export default function Landing() {
@@ -891,7 +913,7 @@ export default function Landing() {
 
         if (withGlow) {
             triggerScreenGlow(type);
-            toast("Momentum Stoked. Sign in or Get Started for free to make it count.", {
+            toast("Momentum Stoked! Sign in or Get Started for free to make it count.", {
                 id: "streak-toast",
                 icon: "🔥"
             });
@@ -910,6 +932,7 @@ export default function Landing() {
 
     const [typedCount, setTypedCount] = useState(0);
     const [heroSettled, setHeroSettled] = useState(false);
+    const [heroTransitioning, setHeroTransitioning] = useState(false);
 
     const typingSpeed = 55;
     const settleDelay = 450;
@@ -925,11 +948,18 @@ export default function Landing() {
             return () => clearTimeout(timeout);
         }
 
-        const settleTimeout = setTimeout(() => {
-            setHeroSettled(true);
+        const transitionTimeout = setTimeout(() => {
+            setHeroTransitioning(true);
         }, settleDelay);
 
-        return () => clearTimeout(settleTimeout);
+        const settleTimeout = setTimeout(() => {
+            setHeroSettled(true);
+        }, settleDelay + 500);
+
+        return () => {
+            clearTimeout(transitionTimeout);
+            clearTimeout(settleTimeout);
+        };
     }, [typedCount, heroSettled]);
 
     const typedHeroText = useMemo(
@@ -944,60 +974,49 @@ export default function Landing() {
 
             <Page>
                 <Hero>
-                    <HeroTitle aria-label="Queue Your Habits, Cue Your Habits">
-                        {!heroSettled ? (
-                            <TypewriterWrap>
-                                {typedHeroText.split("").map((char, index) => {
-                                    if (char === "\n") {
-                                        return <HeroTitleBreak key={`br-${index}`} />;
-                                    }
+                    <HeroTitle aria-label="Build your Streaks, Stoke Your Momentum.">
+                        <HeroTitleStage $visible={!heroTransitioning && !heroSettled}>
+                            <HeroTitleInner>
+                                <TypewriterWrap>
+                                    {typedHeroText.split("").map((char, index) => {
+                                        if (char === "\n") {
+                                            return <HeroTitleBreak key={`br-${index}`} />;
+                                        }
 
-                                    return (
-                                        <TypeChar key={`${char}-${index}`} $index={index}>
-                                            {char === " " ? "\u00A0" : char}
-                                        </TypeChar>
-                                    );
-                                })}
-                                {typedCount < HERO_FULL_TEXT.length && <Caret>|</Caret>}
-                            </TypewriterWrap>
-                        ) : (
-                            <>
+                                        return (
+                                            <TypeChar key={`${char}-${index}`} $index={index}>
+                                                {char === " " ? "\u00A0" : char}
+                                            </TypeChar>
+                                        );
+                                    })}
+                                    {typedCount < HERO_FULL_TEXT.length && <Caret>|</Caret>}
+                                </TypewriterWrap>
+                            </HeroTitleInner>
+                        </HeroTitleStage>
+
+                        <HeroTitleStage $visible={heroTransitioning || heroSettled} $absolute>
+                            <HeroTitleInner>
                                 <HeroTitleStaticLine>
-                                    <Highlight>Queue</Highlight> Your Habits,
+                                    <Highlight>Build</Highlight> your Streaks,
                                 </HeroTitleStaticLine>
                                 <HeroTitleBreak />
                                 <HeroTitleStaticLine>
-                                    <Highlight>Cue</Highlight> Your Habits
+                                    <FireHighlight>Stoke</FireHighlight> Your Momentum.
                                 </HeroTitleStaticLine>
-                            </>
-                        )}
+                            </HeroTitleInner>
+                        </HeroTitleStage>
                     </HeroTitle>
                     <HeroSub>
                         A simple, privacy-first habit tracker. Build better habits, curb the bad ones — your data stays yours.
                     </HeroSub>
                     <CubeTower />
                     <HeroActions>
-                        <PrimaryBtn to="/register">Get Started — It's Free</PrimaryBtn>
+                        <PrimaryBtn to="/register">Get Stoked for Stokely! — It's Free</PrimaryBtn>
                         <SecondaryBtn to="/login">Sign In</SecondaryBtn>
                     </HeroActions>
                 </Hero>
 
-                <LazySection>
-                    <TwoCol>
-                        <Card>
-                            <CardTitle>Inspired by Atomic Habits</CardTitle>
-                            <CardText>
-                                After reading <BookLink href="https://jamesclear.com/atomic-habits" target="_blank" rel="noopener noreferrer">Atomic Habits</BookLink> by James Clear, I built this tracker to put the book's principles into practice. Over 40–50% of daily actions are habitual — so tracking them matters.
-                            </CardText>
-                            <CardText>
-                                No ads. No data selling. Just a clean tracker for building the life you want.
-                            </CardText>
-                        </Card>
-                        <Card style={{ padding: "1rem" }}>
-                            <MockupImage src={Mockup} alt="KuHabit app mockup" loading="lazy" />
-                        </Card>
-                    </TwoCol>
-                </LazySection>
+
 
                 <LazySection
                     onReveal={() => {
@@ -1012,11 +1031,8 @@ export default function Landing() {
                 >
                     <StreakSection>
                         <SectionHeadline>
-                            Build Streaks. Stoke Your Momentum.
-                        </SectionHeadline>
-                        <SectionSub>
                             Feed your streak with daily actions and watch your motivation grow.
-                        </SectionSub>
+                        </SectionHeadline>
 
                         <StreakGrid>
                             <StreakCard>
@@ -1082,7 +1098,7 @@ export default function Landing() {
                     <FeaturesGrid>
                         <FeatureCard>
                             <FeatureIcon>
-                                <Flame color="#cac72d" />
+                                <Flame color="#ca962d" />
                             </FeatureIcon>
                             <FeatureTitle>Build Habits</FeatureTitle>
                             <FeatureText>Track positive habits you want to reinforce daily or on a custom schedule.</FeatureText>
@@ -1096,7 +1112,7 @@ export default function Landing() {
                         </FeatureCard>
                         <FeatureCard>
                             <FeatureIcon>
-                                 <CalendarDays color="#ffffff" />
+                                <CalendarDays color="#ffffff" />
                             </FeatureIcon>
                             <FeatureTitle>Flexible Recurrence</FeatureTitle>
                             <FeatureText>Set habits to repeat daily, weekdays, weekends, or any custom combination.</FeatureText>
@@ -1109,6 +1125,27 @@ export default function Landing() {
                             <FeatureText>Your habits are personal. No tracking, no ads, no third-party data sharing.</FeatureText>
                         </FeatureCard>
                     </FeaturesGrid>
+                </LazySection>
+
+                <LazySection>
+                    <TwoCol>
+                        <Card>
+                            <CardTitle>Inspired by Atomic Habits</CardTitle>
+                            <CardText>
+                                After reading <BookLink href="https://jamesclear.com/atomic-habits" target="_blank" rel="noopener noreferrer">Atomic Habits</BookLink> by James Clear, I built this tracker to put the book's principles into practice. Over 40–50% of daily actions are habitual — so tracking them matters.
+                            </CardText>
+                            <CardText>
+                                No ads. No data selling. Just a clean tracker for building the life you want.
+                            </CardText>
+                        </Card>
+                        <Card style={{ padding: "1rem" }}>
+                            <CardTitle>Cross Platform Support</CardTitle>
+                            <CardText>
+                                Use the lightweight web interface across any devices you own.
+                            </CardText>
+                            <MockupImage src={Mockup} alt="Stokely app mockup" loading="lazy" />
+                        </Card>
+                    </TwoCol>
                 </LazySection>
             </Page>
         </>

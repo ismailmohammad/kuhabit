@@ -9,7 +9,7 @@ services:
       PORT: "9090"
 
   frontend:
-    build: ./kuhabit-frontend
+    build: ./stokely-frontend
     ports:
       - "80:80"
     depends_on:

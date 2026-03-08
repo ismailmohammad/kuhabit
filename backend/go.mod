@@ -1,4 +1,4 @@
-module kuhabit/backend
+module stokely/backend
 
 go 1.22.3
 

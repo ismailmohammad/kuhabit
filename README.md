@@ -1,16 +1,16 @@
-# kuhabit
+# stokely
 Basic habit tracking application leveraging containerization and Kubernetes
 ## Queue your habits, Cue your habits
 
 # Early Video Demo - Frontend
-https://github.com/ismailmohammad/kuhabit/assets/23105842/e39eee8f-cea9-4dec-a376-7ea75df06d21
+https://github.com/ismailmohammad/stokely/assets/23105842/e39eee8f-cea9-4dec-a376-7ea75df06d21
 
 
 # Early Screenshots
 
-![image](https://github.com/ismailmohammad/kuhabit/assets/23105842/78e2e594-e45b-4b35-b83d-460d515aae3f)
-![Screenshot from 2024-05-30 16-30-12](https://github.com/ismailmohammad/kuhabit/assets/23105842/67fe6903-2d30-49a4-97c3-632135208e6b)
-![Screenshot from 2024-05-30 16-30-21](https://github.com/ismailmohammad/kuhabit/assets/23105842/38ead4da-49ef-4415-86c7-c3d792db05a3)
+![image](https://github.com/ismailmohammad/stokely/assets/23105842/78e2e594-e45b-4b35-b83d-460d515aae3f)
+![Screenshot from 2024-05-30 16-30-12](https://github.com/ismailmohammad/stokely/assets/23105842/67fe6903-2d30-49a4-97c3-632135208e6b)
+![Screenshot from 2024-05-30 16-30-21](https://github.com/ismailmohammad/stokely/assets/23105842/38ead4da-49ef-4415-86c7-c3d792db05a3)
 
 
 Basic session authentication

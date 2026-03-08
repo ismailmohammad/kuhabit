@@ -88,7 +88,7 @@ func main() {
 		MaxAge:   86400 * 7, // 7 days
 		HttpOnly: true,
 	})
-	router.Use(sessions.Sessions("kuhabit-session", store))
+	router.Use(sessions.Sessions("stokely-session", store))
 
 	api := router.Group("/api")
 	{

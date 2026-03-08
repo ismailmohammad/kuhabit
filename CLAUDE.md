@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Kuhabit is a full-stack habit tracking app. Users register/login with session auth, then track "build" (positive) and "curb" (negative) habits with flexible daily recurrence. Containerized with Docker Compose.
+Stokely is a full-stack habit tracking app. Users register/login with session auth, then track "build" (positive) and "curb" (negative) habits with flexible daily recurrence. Containerized with Docker Compose.
 
 **Stack:** React 18 + TypeScript + Vite (frontend) · Go + Gin (backend) · Supabase (PostgreSQL) + GORM · Session-based auth (gorilla/sessions via gin-contrib/sessions)
 
 ## Commands
 
-### Frontend (`kuhabit-frontend/`)
+### Frontend (`stokely-frontend/`)
 ```bash
 npm run dev       # Start Vite dev server (proxies /api → localhost:9090)
 npm run lint      # ESLint (zero-warnings policy)
@@ -53,7 +53,7 @@ Three files:
 
 Session stores `userID` as a string in a gorilla/sessions cookie store.
 
-### Frontend (`kuhabit-frontend/src/`)
+### Frontend (`stokely-frontend/src/`)
 - **`api/api.ts`** — Typed fetch wrapper. All calls use `credentials: 'include'` for cookie sessions. Single source of truth for API shape.
 - **`types/habit.d.ts`** — `HabitType` and `UserInfo` interfaces shared across app.
 - **`redux/store.ts`** — Single `user` slice storing `UserInfo | null`. Exports `RootState` and `AppDispatch` types.
@@ -67,8 +67,8 @@ React Router v6 with `createBrowserRouter`. Routes: `/`, `/dashboard`, `/login`,
 
 ### Containerization
 - `backend/Dockerfile` — Multi-stage Go build → alpine runtime
-- `kuhabit-frontend/Dockerfile` — Multi-stage Node build → nginx:alpine
-- `kuhabit-frontend/nginx.conf` — Serves SPA with `try_files`, proxies `/api/` to `http://backend:9090/api/`
+- `stokely-frontend/Dockerfile` — Multi-stage Node build → nginx:alpine
+- `stokely-frontend/nginx.conf` — Serves SPA with `try_files`, proxies `/api/` to `http://backend:9090/api/`
 - `docker-compose.yml` — `backend` + `frontend` only (no local DB — Supabase is the external PostgreSQL host)
 
 ### Habit Model
