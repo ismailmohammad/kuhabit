@@ -1,6 +1,7 @@
 import styled from "styled-components";
 import Habit from "./Habit";
-import { HabitType } from "../../types/habit";
+import StreakView from "./StreakView";
+import { HabitType, DashboardView } from "../../types/habit";
 import { useState, useEffect } from "react";
 import HabitModal from "./NewHabitModal";
 import toast from "react-hot-toast";
@@ -18,6 +19,8 @@ import CubeGreen from '../../assets/cube-logo-green.png';
 import CubeGreenTop from '../../assets/cube-logo-green-top.png';
 import CubeGreenRight from '../../assets/cube-logo-green-right.png';
 import CubeGreenLeft from '../../assets/cube-logo-green-left.png';
+import FieryGreen from '../../assets/fiery-cube-green.png';
+import FieryRed from '../../assets/fiery-cube-red.png';
 
 const negativeLogos = [CubeRedTop, CubeRedRight, CubeRedLeft];
 const positiveLogos = [CubeGreenLeft, CubeGreenRight, CubeGreenTop];
@@ -25,6 +28,10 @@ const positiveLogos = [CubeGreenLeft, CubeGreenRight, CubeGreenTop];
 function getRandomCubeLogo(positive: boolean): string {
     const images = positive ? positiveLogos : negativeLogos;
     return images[Math.floor(Math.random() * images.length)];
+}
+
+function todayISO(): string {
+    return new Date().toISOString().split('T')[0];
 }
 
 const Page = styled.div`
@@ -40,7 +47,7 @@ const PageHeader = styled.div`
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 1rem;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
 `;
 
 const PageTitle = styled.div``;
@@ -62,6 +69,40 @@ const AddButton = styled.button`
     cursor: pointer;
     transition: background 0.2s;
     &:hover { background: #25b07b; }
+`;
+
+const ViewTabBar = styled.div`
+    display: flex;
+    gap: 0.25rem;
+    margin-bottom: 1.25rem;
+    border-bottom: 1px solid #2a2a2a;
+    padding-bottom: 0;
+`;
+
+const ViewTab = styled.button<{ $active: boolean }>`
+    background: none;
+    border: none;
+    color: ${p => p.$active ? '#2dca8e' : '#666'};
+    font-size: 0.9rem;
+    font-weight: ${p => p.$active ? '600' : '400'};
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    border-bottom: 2px solid ${p => p.$active ? '#2dca8e' : 'transparent'};
+    margin-bottom: -1px;
+    transition: color 0.15s, border-color 0.15s;
+    &:hover { color: ${p => p.$active ? '#2dca8e' : '#aaa'}; }
+`;
+
+const CalendarInput = styled.input`
+    background: #1e1e1e;
+    color: white;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+    color-scheme: dark;
+    cursor: pointer;
 `;
 
 const HabitsContainer = styled.div`
@@ -129,15 +170,17 @@ export default function Dashboard() {
     const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
     const [habitToEdit, setHabitToEdit] = useState<HabitType | null>(null);
+    const [view, setView] = useState<DashboardView>('daily');
+    const [calendarDate, setCalendarDate] = useState<string>(todayISO());
 
     const navigate = useNavigate();
     const dispatch = useDispatch();
     const userInfo = useSelector((state: RootState) => state.user.userInfo);
 
-    // Stable logo map so icons don't re-randomize on re-render
     const [logoMap] = useState<Map<number, string>>(new Map());
 
     function getLogo(habit: HabitType): string {
+        if (habit.streak >= 2) return habit.positiveType ? FieryGreen : FieryRed;
         if (habit.complete) return habit.positiveType ? CubeGreen : CubeRed;
         if (!logoMap.has(habit.id)) {
             logoMap.set(habit.id, getRandomCubeLogo(habit.positiveType));
@@ -149,12 +192,12 @@ export default function Dashboard() {
         let cancelled = false;
         async function load() {
             try {
-                // Hydrate user info if missing (e.g. page refresh)
                 if (!userInfo) {
                     const me = await api.auth.me();
                     if (!cancelled) dispatch(setUserInfo(me));
                 }
-                const data = await api.habits.list();
+                const date = view === 'calendar' ? calendarDate : undefined;
+                const data = await api.habits.list(view === 'streak' ? 'all' : view, date);
                 if (!cancelled) setHabits(data);
             } catch {
                 if (!cancelled) navigate("/login");
@@ -164,7 +207,9 @@ export default function Dashboard() {
         }
         load();
         return () => { cancelled = true; };
-    }, []);
+    }, [view, calendarDate]);
+
+    const effectiveDate = view === 'calendar' ? calendarDate : undefined;
 
     const handleToggleComplete = async (habit: HabitType) => {
         const next = !habit.complete;
@@ -174,12 +219,19 @@ export default function Dashboard() {
         }
         setHabits(prev => prev.map(h => h.id === habit.id ? { ...h, complete: next } : h));
         try {
-            await api.habits.update(habit.id, { complete: next });
+            if (next) {
+                await api.habits.logComplete(habit.id, effectiveDate);
+            } else {
+                await api.habits.logUncomplete(habit.id, effectiveDate);
+            }
+            // Refresh to get updated streak/hasFreeze
+            const date = view === 'calendar' ? calendarDate : undefined;
+            const data = await api.habits.list(view === 'streak' ? 'all' : view, date);
+            setHabits(data);
             toast.success(next ? `✓ "${habit.name}" complete` : `↩ "${habit.name}" reset`);
-        } catch (err: any) {
-            // Rollback
+        } catch (err: unknown) {
             setHabits(prev => prev.map(h => h.id === habit.id ? habit : h));
-            toast.error(err.message || "Update failed");
+            toast.error(err instanceof Error ? err.message : "Update failed");
         }
     };
 
@@ -189,30 +241,32 @@ export default function Dashboard() {
         try {
             await api.habits.remove(id);
             toast.success(`Removed "${habit?.name}"`);
-        } catch (err: any) {
-            // Rollback
+        } catch (err: unknown) {
             if (habit) setHabits(prev => [...prev, habit].sort((a, b) => a.id - b.id));
-            toast.error(err.message || "Delete failed");
+            toast.error(err instanceof Error ? err.message : "Delete failed");
         }
     };
 
-    const handleCreate = async (name: string, recurrence: string, positiveType: boolean) => {
+    const handleCreate = async (data: {
+        name: string; recurrence: string; positiveType: boolean;
+        icon?: string; recurrenceEnd?: string | null; notes?: string; reminderTime?: string;
+    }) => {
         try {
-            const newHabit = await api.habits.create(name, recurrence, positiveType);
+            const newHabit = await api.habits.create(data);
             setHabits(prev => [...prev, newHabit]);
             toast.success(`"${newHabit.name}" added`);
-        } catch (err: any) {
-            toast.error(err.message || "Failed to create habit");
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : "Failed to create habit");
         }
     };
 
-    const handleUpdate = async (id: number, changes: Partial<Omit<HabitType, 'id'>>) => {
+    const handleUpdate = async (id: number, changes: Record<string, unknown>) => {
         try {
             const updated = await api.habits.update(id, changes);
             setHabits(prev => prev.map(h => h.id === id ? updated : h));
             toast.success("Habit updated");
-        } catch (err: any) {
-            toast.error(err.message || "Update failed");
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : "Update failed");
         }
     };
 
@@ -230,6 +284,13 @@ export default function Dashboard() {
     const incomplete = habits.filter(h => !h.complete);
     const complete = habits.filter(h => h.complete);
 
+    const views: { id: DashboardView; label: string }[] = [
+        { id: 'daily', label: 'Daily' },
+        { id: 'all', label: 'All' },
+        { id: 'calendar', label: 'Calendar' },
+        { id: 'streak', label: 'Streaks' },
+    ];
+
     return (
         <>
             <Page>
@@ -245,12 +306,30 @@ export default function Dashboard() {
                     </AddButton>
                 </PageHeader>
 
+                <ViewTabBar>
+                    {views.map(v => (
+                        <ViewTab key={v.id} $active={view === v.id} onClick={() => setView(v.id)}>
+                            {v.label}
+                        </ViewTab>
+                    ))}
+                </ViewTabBar>
+
+                {view === 'calendar' && (
+                    <CalendarInput
+                        type="date"
+                        value={calendarDate}
+                        onChange={e => setCalendarDate(e.target.value)}
+                    />
+                )}
+
                 {loading ? (
                     <LoadingState>Loading your habits…</LoadingState>
+                ) : view === 'streak' ? (
+                    <StreakView habits={habits} />
                 ) : habits.length === 0 ? (
                     <EmptyState>
-                        <p style={{ fontSize: "1.1rem", marginBottom: "0.5rem" }}>No habits yet.</p>
-                        <p style={{ fontSize: "0.9rem" }}>Click <strong>+ New Habit</strong> to queue your first one.</p>
+                        <p style={{ fontSize: "1.1rem", marginBottom: "0.5rem" }}>No habits here.</p>
+                        <p style={{ fontSize: "0.9rem" }}>Click <strong>+ New Habit</strong> to add one.</p>
                     </EmptyState>
                 ) : (
                     <>
