@@ -1,19 +1,36 @@
 services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+
   backend:
     build: ./backend
     restart: on-failure
     environment:
       DB_DSN: ${DB_DSN}
       SESSION_SECRET: ${SESSION_SECRET}
-      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://0.0.0.0}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-https://stokely.quest}
       PORT: "9090"
+      COOKIE_SECURE: "true"
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
       VAPID_EMAIL: ${VAPID_EMAIL}
 
   frontend:
     build: ./stokely-frontend
-    ports:
-      - "80:80"
     depends_on:
       - backend
+
+volumes:
+  caddy_data:
+  caddy_config:

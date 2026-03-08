@@ -1,0 +1,7 @@
+stokely.quest {
+    reverse_proxy frontend:80
+}
+
+www.stokely.quest {
+    redir https://stokely.quest{uri} permanent
+}

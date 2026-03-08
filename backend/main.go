@@ -89,6 +89,7 @@ func main() {
 		Path:     "/",
 		MaxAge:   86400 * 7, // 7 days
 		HttpOnly: true,
+		Secure:   getEnv("COOKIE_SECURE", "") == "true",
 	})
 	router.Use(sessions.Sessions("stokely-session", store))
 
