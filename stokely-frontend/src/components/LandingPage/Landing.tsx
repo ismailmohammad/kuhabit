@@ -146,6 +146,9 @@ const ScreenGlow = styled.div<{ $color: "green" | "red"; $active: boolean }>`
   pointer-events: none;
   z-index: 999;
   opacity: 0;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  will-change: opacity;
 
   background:
     radial-gradient(circle at center,

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -70,8 +71,6 @@ func main() {
 
 	allowedOrigins := []string{
 		getEnv("FRONTEND_ORIGIN", "http://localhost:5173"),
-		"http://localhost:80",
-		"http://localhost",
 	}
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     allowedOrigins,
@@ -90,6 +89,7 @@ func main() {
 		MaxAge:   86400 * 7, // 7 days
 		HttpOnly: true,
 		Secure:   getEnv("COOKIE_SECURE", "") == "true",
+		SameSite: http.SameSiteLaxMode,
 	})
 	router.Use(sessions.Sessions("stokely-session", store))
 

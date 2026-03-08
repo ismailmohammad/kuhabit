@@ -3,14 +3,71 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// ── Auth Rate Limiter ─────────────────────────────────────────────────────────
+
+type authBucket struct {
+	mu        sync.Mutex
+	count     int
+	windowEnd time.Time
+}
+
+var authLimitMap sync.Map
+
+const authRateWindow = time.Minute
+const authRateMax = 10
+
+func checkAuthRateLimit(c *gin.Context) bool {
+	ip := c.ClientIP()
+	now := time.Now()
+	val, _ := authLimitMap.LoadOrStore(ip, &authBucket{windowEnd: now.Add(authRateWindow)})
+	b := val.(*authBucket)
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if now.After(b.windowEnd) {
+		b.count = 0
+		b.windowEnd = now.Add(authRateWindow)
+	}
+	b.count++
+	return b.count <= authRateMax
+}
+
+// ── Input Validators ──────────────────────────────────────────────────────────
+
+var validDayCodes = map[string]bool{
+	"Su": true, "Mo": true, "Tu": true, "We": true, "Th": true, "Fr": true, "Sa": true,
+}
+
+func isValidRecurrence(r string) bool {
+	parts := strings.Split(r, "-")
+	if len(parts) == 0 || len(parts) > 7 {
+		return false
+	}
+	seen := map[string]bool{}
+	for _, p := range parts {
+		if !validDayCodes[p] || seen[p] {
+			return false
+		}
+		seen[p] = true
+	}
+	return true
+}
+
+var reminderTimeRe = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d$`)
+
+func isValidReminderTime(t string) bool {
+	return t == "" || reminderTimeRe.MatchString(t)
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -188,9 +245,13 @@ func longestStreakEver(h Habit, logs []HabitLog) int {
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 func handleRegister(c *gin.Context) {
+	if !checkAuthRateLimit(c) {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many attempts, please try again later"})
+		return
+	}
 	var input struct {
 		Username string  `json:"username" binding:"required,min=3,max=50"`
-		Password string  `json:"password" binding:"required,min=8"`
+		Password string  `json:"password" binding:"required,min=8,max=128"`
 		Email    *string `json:"email"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -244,9 +305,13 @@ func handleRegister(c *gin.Context) {
 }
 
 func handleLogin(c *gin.Context) {
+	if !checkAuthRateLimit(c) {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many attempts, please try again later"})
+		return
+	}
 	var input struct {
-		Username string `json:"username" binding:"required"`
-		Password string `json:"password" binding:"required"`
+		Username string `json:"username" binding:"required,max=50"`
+		Password string `json:"password" binding:"required,max=128"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -426,16 +491,24 @@ func getHabits(c *gin.Context) {
 func createHabit(c *gin.Context) {
 	user := c.MustGet("user").(User)
 	var input struct {
-		Name          string     `json:"name" binding:"required"`
+		Name          string     `json:"name" binding:"required,max=500"`
 		Recurrence    string     `json:"recurrence" binding:"required"`
 		PositiveType  bool       `json:"positiveType"`
-		Icon          string     `json:"icon"`
+		Icon          string     `json:"icon" binding:"max=100"`
 		RecurrenceEnd *time.Time `json:"recurrenceEnd"`
-		Notes         string     `json:"notes"`
+		Notes         string     `json:"notes" binding:"max=2000"`
 		ReminderTime  string     `json:"reminderTime"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if !isValidRecurrence(input.Recurrence) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid recurrence format"})
+		return
+	}
+	if !isValidReminderTime(input.ReminderTime) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid reminder time, expected HH:MM"})
 		return
 	}
 
@@ -483,9 +556,17 @@ func updateHabit(c *gin.Context) {
 	}
 
 	if input.Name != nil {
+		if len(*input.Name) == 0 || len(*input.Name) > 500 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Name must be between 1 and 500 characters"})
+			return
+		}
 		habit.Name = *input.Name
 	}
 	if input.Recurrence != nil {
+		if !isValidRecurrence(*input.Recurrence) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid recurrence format"})
+			return
+		}
 		habit.Recurrence = *input.Recurrence
 	}
 	if input.PositiveType != nil {
@@ -501,6 +582,10 @@ func updateHabit(c *gin.Context) {
 		habit.Notes = *input.Notes
 	}
 	if input.ReminderTime != nil {
+		if !isValidReminderTime(*input.ReminderTime) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid reminder time, expected HH:MM"})
+			return
+		}
 		habit.ReminderTime = *input.ReminderTime
 	}
 
