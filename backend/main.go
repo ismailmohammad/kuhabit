@@ -62,7 +62,7 @@ func main() {
 		log.Fatal("Failed to connect to database:", err)
 	}
 
-	db.AutoMigrate(&User{}, &Habit{})
+	db.AutoMigrate(&User{}, &Habit{}, &HabitLog{}, &PushSubscription{}, &StreakFreeze{})
 
 	router := gin.Default()
 
@@ -98,6 +98,7 @@ func main() {
 			auth.POST("/login", handleLogin)
 			auth.POST("/logout", handleLogout)
 			auth.GET("/me", requireAuth, handleMe)
+			auth.PUT("/password", requireAuth, handleChangePassword)
 		}
 
 		habits := api.Group("/habits")
@@ -107,8 +108,27 @@ func main() {
 			habits.POST("", createHabit)
 			habits.PUT("/:id", updateHabit)
 			habits.DELETE("/:id", deleteHabit)
+			habits.POST("/:id/log", createHabitLog)
+			habits.DELETE("/:id/log", deleteHabitLog)
+			habits.GET("/:id/streak", getHabitStreak)
+		}
+
+		user := api.Group("/user")
+		user.Use(requireAuth)
+		{
+			user.GET("/export", handleExportData)
+			user.DELETE("/account", handleDeleteAccount)
+		}
+
+		push := api.Group("/push")
+		{
+			push.GET("/vapid-public", handleVapidPublic)
+			push.POST("/subscribe", requireAuth, handlePushSubscribe)
+			push.DELETE("/unsubscribe", requireAuth, handlePushUnsubscribe)
 		}
 	}
+
+	startScheduler()
 
 	port := getEnv("PORT", "9090")
 	log.Printf("Starting server on :%s", port)
