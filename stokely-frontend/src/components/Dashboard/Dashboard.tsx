@@ -1015,7 +1015,7 @@ export default function Dashboard() {
                         {view === 'streak' ? (
                             <StreakView
                                 habits={filteredHabits}
-                                onDaySelect={(dateValue, habitName) => {
+                                onDaySelect={(dateValue: string, habitName: string) => {
                                     setLoading(true);
                                     setView('calendar');
                                     setCalendarDate(dateValue);

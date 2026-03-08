@@ -23,6 +23,7 @@ import FieryRed from '../../assets/fiery-cube-red.png';
 import GreenLogs from "../../assets/green-logs.png";
 import RedLogs from "../../assets/red-logs.png";
 import GloveCursor from "../../assets/glove-cursor.png";
+import KindlingHandsOut from "../../assets/kindling/kindling-hands-out.png";
 
 
 // ── Cursor Glove  ────────────────────────────────────────────────────────────────
@@ -213,6 +214,29 @@ const floatUp = keyframes`
     0%   { transform: translateY(0px) rotate(-2deg); }
     50%  { transform: translateY(-6px) rotate(2deg); }
     100% { transform: translateY(0px) rotate(-2deg); }
+`;
+
+const cubeHeat = keyframes`
+  0% {
+    filter:
+      drop-shadow(0 4px 8px rgba(0, 0, 0, 0.45))
+      drop-shadow(0 0 6px rgba(255, 120, 40, 0.24))
+      drop-shadow(0 0 12px rgba(255, 120, 40, 0.14));
+  }
+
+  50% {
+    filter:
+      drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5))
+      drop-shadow(0 0 8px rgba(255, 145, 55, 0.34))
+      drop-shadow(0 0 16px rgba(255, 145, 55, 0.2));
+  }
+
+  100% {
+    filter:
+      drop-shadow(0 4px 8px rgba(0, 0, 0, 0.45))
+      drop-shadow(0 0 6px rgba(255, 120, 40, 0.24))
+      drop-shadow(0 0 12px rgba(255, 120, 40, 0.14));
+  }
 `;
 
 const gradientShift = keyframes`
@@ -493,21 +517,50 @@ const TowerRow = styled.div`
     margin-top: -1.0rem;
 `;
 
+const TowerScene = styled.div`
+    position: relative;
+    width: min(420px, 100%);
+    height: clamp(10.5rem, 21vw, 14rem);
+    margin: 1.05rem auto 1.2rem;
+`;
+
 const TowerWrap = styled.div`
+    z-index: 2;
     display: flex;
     flex-direction: column-reverse;
     align-items: center;
-    margin: 0 auto 0.5rem;
+    margin: 0 auto;
     line-height: 0;
+    position: absolute;
+    left: 50%;
+    bottom: 0.85rem;
+    transform: translateX(-50%);
 `;
 
 const TowerCube = styled.img<{ $delay: number }>`
-    width: clamp(2.5rem, 6vw, 3.5rem);
-    height: clamp(2.5rem, 6vw, 3.5rem);
+    width: clamp(1.8rem, 4.2vw, 2.6rem);
+    height: clamp(1.8rem, 4.2vw, 2.6rem);
     object-fit: contain;
     display: block;
-    animation: ${floatUp} 3s ease-in-out ${p => p.$delay}s infinite;
-    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5));
+    animation:
+      ${floatUp} 3s ease-in-out ${p => p.$delay}s infinite,
+      ${cubeHeat} 1.8s ease-in-out infinite;
+`;
+
+const KindlingHands = styled.img`
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    transform: translateX(-50%);
+    width: clamp(15.5rem, 32vw, 22rem);
+    height: auto;
+    z-index: 1;
+    pointer-events: none;
+    user-select: none;
+    filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.4));
+    transition: width 0.2s ease, filter 0.2s ease;
+    animation:
+      ${flameFlicker} 0.75s ease-in-out infinite;
 `;
 
 const TOWER_ROWS = [
@@ -527,20 +580,23 @@ const TOWER_ROWS = [
 
 function CubeTower() {
   return (
-    <TowerWrap>
-      {TOWER_ROWS.map((row, rowIndex) => (
-        <TowerRow key={rowIndex}>
-          {row.map((cube, i) => (
-            <TowerCube
-              key={i}
-              src={cube.src}
-              alt=""
-              $delay={cube.delay}
-            />
-          ))}
-        </TowerRow>
-      ))}
-    </TowerWrap>
+    <TowerScene>
+      <KindlingHands src={KindlingHandsOut} alt="" aria-hidden="true" />
+      <TowerWrap>
+        {TOWER_ROWS.map((row, rowIndex) => (
+          <TowerRow key={rowIndex}>
+            {row.map((cube, i) => (
+              <TowerCube
+                key={i}
+                src={cube.src}
+                alt=""
+                $delay={cube.delay}
+              />
+            ))}
+          </TowerRow>
+        ))}
+      </TowerWrap>
+    </TowerScene>
   );
 }
 
@@ -697,7 +753,7 @@ const HeroSub = styled.p`
     font-size: clamp(1rem, 2.5vw, 1.2rem);
     color: #aaa;
     max-width: 560px;
-    margin: 0 auto 2rem;
+    margin: 0 auto 1.25rem;
     line-height: 1.6;
 `;
 
