@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { api } from '../api/api';
-import { clearUserInfo } from '../redux/userSlice';
+import { clearUserInfo, setUserInfo } from '../redux/userSlice';
+import type { RootState } from '../redux/store';
 import './SettingsModal.css';
 
 type Props = { onClose: () => void };
@@ -11,6 +12,7 @@ type Props = { onClose: () => void };
 export default function SettingsModal({ onClose }: Props) {
     const dispatch = useDispatch();
     const navigate = useNavigate();
+    const userInfo = useSelector((state: RootState) => state.user.userInfo);
 
     // Change password
     const [currentPw, setCurrentPw] = useState('');
@@ -25,6 +27,7 @@ export default function SettingsModal({ onClose }: Props) {
     const [deleteLoading, setDeleteLoading] = useState(false);
 
     const [exportLoading, setExportLoading] = useState(false);
+    const [dailySparkLoading, setDailySparkLoading] = useState(false);
 
     const handleChangePassword = async () => {
         if (newPw !== confirmPw) { toast.error('Passwords do not match'); return; }
@@ -71,6 +74,20 @@ export default function SettingsModal({ onClose }: Props) {
             toast.error(err instanceof Error ? err.message : 'Deletion failed');
         } finally {
             setDeleteLoading(false);
+        }
+    };
+
+    const handleDailySparkToggle = async (enabled: boolean) => {
+        if (!userInfo) return;
+        setDailySparkLoading(true);
+        try {
+            const res = await api.auth.setDailySparkEnabled(enabled);
+            dispatch(setUserInfo({ ...userInfo, dailySparkEnabled: res.dailySparkEnabled }));
+            toast.success(res.dailySparkEnabled ? 'Daily Spark enabled' : 'Daily Spark disabled');
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : 'Failed to update Daily Spark setting');
+        } finally {
+            setDailySparkLoading(false);
         }
     };
 
@@ -136,6 +153,21 @@ export default function SettingsModal({ onClose }: Props) {
                     <button className="settings-btn settings-btn--primary" disabled>Update Email</button>
                 </section>
 
+                {/* Daily SPark */}
+                <section className="settings-section">
+                    <h3 className="settings-section-title">Daily Spark</h3>
+                    <p className="settings-desc">Show a motivational Kindling message when you log in.</p>
+                    <label className="settings-toggle-row">
+                        <span>{userInfo?.dailySparkEnabled === false ? 'Disabled' : 'Enabled'}</span>
+                        <input
+                            type="checkbox"
+                            checked={userInfo?.dailySparkEnabled !== false}
+                            onChange={e => void handleDailySparkToggle(e.target.checked)}
+                            disabled={dailySparkLoading}
+                        />
+                    </label>
+                </section>
+
                 {/* Export Data */}
                 <section className="settings-section">
                     <h3 className="settings-section-title">Export Your Data</h3>
@@ -148,6 +180,8 @@ export default function SettingsModal({ onClose }: Props) {
                         {exportLoading ? 'Exporting…' : 'Download JSON'}
                     </button>
                 </section>
+
+
 
                 {/* Delete Account */}
                 <section className="settings-section settings-section--danger">

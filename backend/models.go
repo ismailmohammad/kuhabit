@@ -3,11 +3,13 @@ package main
 import "time"
 
 type User struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	CreatedAt time.Time `json:"-"`
-	Username  string    `gorm:"type:varchar(50);uniqueIndex;not null" json:"username"`
-	Email     *string   `gorm:"type:varchar(255);uniqueIndex" json:"email,omitempty"`
-	Password  string    `gorm:"type:varchar(255);not null" json:"-"`
+	ID                uint      `gorm:"primaryKey" json:"id"`
+	CreatedAt         time.Time `json:"-"`
+	Username          string    `gorm:"type:varchar(50);uniqueIndex;not null" json:"username"`
+	Email             *string   `gorm:"type:varchar(255);uniqueIndex" json:"email,omitempty"`
+	Password          string    `gorm:"type:varchar(255);not null" json:"-"`
+	WelcomeSeen       bool      `gorm:"default:false" json:"-"`
+	DailySparkEnabled bool      `gorm:"default:true" json:"-"`
 }
 
 type Habit struct {

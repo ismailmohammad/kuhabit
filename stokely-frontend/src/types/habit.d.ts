@@ -17,6 +17,8 @@ export interface UserInfo {
     id: number;
     username: string;
     email?: string;
+    showWelcome?: boolean;
+    dailySparkEnabled?: boolean;
 }
 
 export type DashboardView = 'daily' | 'all' | 'calendar' | 'streak' | 'achievements';

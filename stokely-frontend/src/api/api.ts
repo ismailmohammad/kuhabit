@@ -26,6 +26,9 @@ export const api = {
         me: () => req<UserInfo>('/auth/me'),
         changePassword: (currentPassword: string, newPassword: string) =>
             req<void>('/auth/password', { method: 'PUT', body: JSON.stringify({ currentPassword, newPassword }) }),
+        markWelcomeSeen: () => req<void>('/auth/welcome-seen', { method: 'POST' }),
+        setDailySparkEnabled: (enabled: boolean) =>
+            req<{ dailySparkEnabled: boolean }>('/auth/daily-spark', { method: 'PUT', body: JSON.stringify({ enabled }) }),
     },
     habits: {
         list: (view: DashboardView = 'daily', date?: string) =>

@@ -3,7 +3,7 @@ import Habit from "./Habit";
 import StreakView from "./StreakView";
 import AchievementsView from "./AchievementsView";
 import { HabitType, DashboardView, AchievementType } from "../../types/habit";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import HabitModal from "./NewHabitModal";
 import toast from "react-hot-toast";
 import { api } from "../../api/api";
@@ -28,6 +28,10 @@ import Badge7Day from '../../assets/kindling/badge_7_day_flame.png';
 import Badge21Day from '../../assets/kindling/badge_21_day_momentum.png';
 import Badge90Day from '../../assets/kindling/badge_90_day_forge.png';
 import Badge365Day from '../../assets/kindling/badge_365_day_legend.png';
+import WelcomeToStokely from '../../assets/kindling/welcome-to-stokely.png';
+import KindleIdeaLeft from '../../assets/kindling/kindle_idea_left.png';
+import KindleIdeaRight from '../../assets/kindling/kindle_idea_right.png';
+import { DAILY_SPARK_LIBRARY } from '../../assets/kindling/dailySparks';
 
 const negativeLogos = [CubeRedTop, CubeRedRight, CubeRedLeft];
 const positiveLogos = [CubeGreenLeft, CubeGreenRight, CubeGreenTop];
@@ -41,8 +45,13 @@ function todayISO(): string {
     return new Date().toISOString().split('T')[0];
 }
 
+function randomItem<T>(items: T[]): T {
+    return items[Math.floor(Math.random() * items.length)];
+}
+
 const ALL_TAB_PAGE_SIZE = 20;
 const ACHIEVEMENT_SEEN_KEY_PREFIX = 'stokely_seen_achievements_v1';
+const DAILY_SPARK_IMAGES = [KindleIdeaLeft, KindleIdeaRight];
 const ACHIEVEMENT_ORDER: AchievementType[] = [
     { key: 'first_completion', title: 'First Completion', description: 'Complete your first habit log.', unlocked: false },
     { key: 'first_streak', title: 'First Streak', description: 'Reach your first 2-day streak.', unlocked: false },
@@ -91,6 +100,10 @@ const unlockBadgeFade = keyframes`
     12% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
     82% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
     100% { opacity: 0; transform: translateX(-50%) translateY(-8px) scale(0.98); }
+`;
+const bubbleIn = keyframes`
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
 `;
 
 // ── Styled components ──────────────────────────────────────────────────────────
@@ -350,6 +363,123 @@ const UnlockToastText = styled.p`
     font-weight: 700;
 `;
 
+const WelcomeOverlay = styled.div`
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.68);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 340;
+    padding: 1rem;
+`;
+
+const WelcomeCard = styled.div`
+    width: min(720px, 100%);
+    background: linear-gradient(
+        160deg,
+        rgba(52, 52, 52, 0.32),
+        rgba(24, 24, 24, 0.24)
+    );
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    box-shadow:
+        0 18px 40px rgba(0, 0, 0, 0.45),
+        inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    border-radius: clamp(1rem, 2vw, 1.6rem);
+    padding: clamp(0.8rem, 1.5vw, 1.15rem);
+    overflow: hidden;
+    backdrop-filter: blur(12px) saturate(125%);
+`;
+
+const WelcomeImage = styled.img`
+    max-width: 50%;
+    max-height: 62vh;
+    object-fit: contain;
+    border-radius: clamp(0.85rem, 1.4vw, 1.25rem);
+    background: rgba(0, 0, 0, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    display: block;
+    margin: 0 auto;
+`;
+
+const DailySparkImage = styled.img`
+    max-width: 50%;
+    max-height: 62vh;
+    object-fit: contain;
+    display: block;
+    margin: 0 auto;
+`;
+
+const WelcomeBubble = styled.div`
+    position: relative;
+    margin-top: 0.95rem;
+    background: linear-gradient(155deg, rgba(22, 22, 22, 0.94), rgba(14, 14, 14, 0.9));
+    border: 1px solid rgba(68, 224, 162, 0.42);
+    color: #fff;
+    border-radius: 14px;
+    padding: 0.85rem 1rem;
+    box-shadow:
+        0 10px 26px rgba(0, 0, 0, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    line-height: 1.45;
+    animation: ${bubbleIn} 0.45s ease forwards;
+
+    &::before {
+        content: '';
+        position: absolute;
+        top: -10px;
+        left: 50%;
+        width: 16px;
+        height: 16px;
+        background: rgba(20, 20, 20, 0.95);
+        border-left: 1px solid rgba(68, 224, 162, 0.42);
+        border-top: 1px solid rgba(68, 224, 162, 0.42);
+        transform: translateX(-50%) rotate(45deg);
+    }
+`;
+
+const WelcomeSpeaker = styled.p`
+    margin: 0 0 0.22rem;
+    color: #2dca8e;
+    font-size: 0.77rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+`;
+
+const WelcomeSpeech = styled.p`
+    margin: 0;
+    color: #f4f4f4;
+    font-size: 0.96rem;
+    font-weight: 650;
+`;
+
+const DailySparkTitle = styled.p`
+    margin: 0 0 0.22rem;
+    color: #ffc46b;
+    font-size: 0.77rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+`;
+
+const WelcomeActions = styled.div`
+    margin-top: 0.8rem;
+    display: flex;
+    justify-content: flex-end;
+`;
+
+const WelcomeDismissBtn = styled.button`
+    background: #2a2a2a;
+    color: #fff;
+    border: 1px solid #454545;
+    border-radius: 8px;
+    padding: 0.45rem 0.8rem;
+    font-size: 0.84rem;
+    font-weight: 700;
+    cursor: pointer;
+`;
+
 // ── Confirm modal ──────────────────────────────────────────────────────────────
 
 const ConfirmOverlay = styled.div<{ $closing: boolean }>`
@@ -463,8 +593,14 @@ export default function Dashboard() {
     const [achievements, setAchievements] = useState<AchievementType[]>(ACHIEVEMENT_ORDER);
     const [achievementUnlockToast, setAchievementUnlockToast] = useState<AchievementType | null>(null);
     const [highlightAchievementsTab, setHighlightAchievementsTab] = useState(false);
+    const [showWelcomeOverlay, setShowWelcomeOverlay] = useState(false);
+    const [showDailySparkOverlay, setShowDailySparkOverlay] = useState(false);
+    const [dailySparkImage, setDailySparkImage] = useState(KindleIdeaLeft);
+    const [dailySparkMessage, setDailySparkMessage] = useState('');
     const [allVisibleCount, setAllVisibleCount] = useState(ALL_TAB_PAGE_SIZE);
     const allLoadMoreRef = useRef<HTMLDivElement | null>(null);
+    const hasShownDailySparkRef = useRef(false);
+    const hadWelcomeOverlayRef = useRef(false);
 
     const [confirmState, setConfirmState] = useState<ConfirmState>(null);
     const [confirmClosing, setConfirmClosing] = useState(false);
@@ -568,6 +704,80 @@ export default function Dashboard() {
             clearTimeout(stopHighlight);
         };
     }, [achievements, achievementSeenKey]);
+
+    useEffect(() => {
+        if (!userInfo?.showWelcome) return;
+        hadWelcomeOverlayRef.current = true;
+        setShowWelcomeOverlay(true);
+    }, [userInfo?.id, userInfo?.showWelcome]);
+
+    const dismissWelcomeOverlay = useCallback(async () => {
+        setShowWelcomeOverlay(false);
+        try {
+            await api.auth.markWelcomeSeen();
+        } catch {
+            // ignore
+        }
+        if (userInfo?.showWelcome) {
+            dispatch(setUserInfo({ ...userInfo, showWelcome: false }));
+        }
+    }, [dispatch, userInfo]);
+
+    useEffect(() => {
+        if (!showWelcomeOverlay) return;
+        hadWelcomeOverlayRef.current = true;
+        setShowDailySparkOverlay(false);
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') void dismissWelcomeOverlay();
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => {
+            window.removeEventListener('keydown', onKeyDown);
+        };
+    }, [dismissWelcomeOverlay, showWelcomeOverlay]);
+
+    const dismissDailySparkOverlay = useCallback(() => {
+        setShowDailySparkOverlay(false);
+    }, []);
+
+    useEffect(() => {
+        if (!userInfo?.id) {
+            hasShownDailySparkRef.current = false;
+            hadWelcomeOverlayRef.current = false;
+            setShowDailySparkOverlay(false);
+        }
+    }, [userInfo?.id]);
+
+    useEffect(() => {
+        if (!userInfo?.id || showWelcomeOverlay || userInfo?.showWelcome) return;
+        if (userInfo.dailySparkEnabled === false) return;
+        if (hadWelcomeOverlayRef.current || hasShownDailySparkRef.current) return;
+        hasShownDailySparkRef.current = true;
+        setDailySparkImage(randomItem(DAILY_SPARK_IMAGES));
+        setDailySparkMessage(randomItem(DAILY_SPARK_LIBRARY));
+        setShowDailySparkOverlay(true);
+    }, [showWelcomeOverlay, userInfo?.id, userInfo?.showWelcome, userInfo?.dailySparkEnabled]);
+
+    useEffect(() => {
+        if (userInfo?.dailySparkEnabled === false) {
+            setShowDailySparkOverlay(false);
+        }
+    }, [userInfo?.dailySparkEnabled]);
+
+    useEffect(() => {
+        if (!showDailySparkOverlay || showWelcomeOverlay) return;
+        const timer = window.setTimeout(() => setShowDailySparkOverlay(false), 1250);
+        return () => window.clearTimeout(timer);
+    }, [showDailySparkOverlay, showWelcomeOverlay]);
+
+    useEffect(() => {
+        if (!showDailySparkOverlay || showWelcomeOverlay) return;
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') dismissDailySparkOverlay();
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [dismissDailySparkOverlay, showDailySparkOverlay, showWelcomeOverlay]);
 
     const doToggle = async (habit: HabitType, next: boolean) => {
         setHabits(prev => prev.map(h => h.id === habit.id ? { ...h, complete: next } : h));
@@ -896,6 +1106,43 @@ export default function Dashboard() {
                         Achievement unlocked: {achievementUnlockToast.title}
                     </UnlockToastText>
                 </UnlockToast>
+            )}
+
+            {showWelcomeOverlay && userInfo && (
+                <WelcomeOverlay onClick={() => { void dismissWelcomeOverlay(); }}>
+                    <WelcomeCard onClick={e => e.stopPropagation()}>
+                        <WelcomeImage src={WelcomeToStokely} alt="Welcome to Stokely mascot" />
+                        <WelcomeBubble>
+                            <WelcomeSpeaker>Kindling</WelcomeSpeaker>
+                            <WelcomeSpeech>
+                                "It&apos;s great to meet you, {userInfo.username}! I&apos;ll join you on your journey towards betterment. You can disable my 'Daily Sparks' within Settings. Let's start building!"
+                            </WelcomeSpeech>
+                        </WelcomeBubble>
+                        <WelcomeActions>
+                            <WelcomeDismissBtn type="button" onClick={() => { void dismissWelcomeOverlay(); }}>
+                                Dismiss
+                            </WelcomeDismissBtn>
+                        </WelcomeActions>
+                    </WelcomeCard>
+                </WelcomeOverlay>
+            )}
+
+            {showDailySparkOverlay && !showWelcomeOverlay && userInfo && (
+                <WelcomeOverlay onClick={dismissDailySparkOverlay}>
+                    <WelcomeCard onClick={e => e.stopPropagation()}>
+                        <DailySparkImage src={dailySparkImage} alt="Kindling daily spark" />
+                        <WelcomeBubble>
+                            <DailySparkTitle>Daily Spark</DailySparkTitle>
+                            <WelcomeSpeaker>Kindling</WelcomeSpeaker>
+                            <WelcomeSpeech>"{dailySparkMessage}"</WelcomeSpeech>
+                        </WelcomeBubble>
+                        <WelcomeActions>
+                            <WelcomeDismissBtn type="button" onClick={dismissDailySparkOverlay}>
+                                Dismiss
+                            </WelcomeDismissBtn>
+                        </WelcomeActions>
+                    </WelcomeCard>
+                </WelcomeOverlay>
             )}
         </>
     );

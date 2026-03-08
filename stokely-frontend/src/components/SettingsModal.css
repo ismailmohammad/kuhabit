@@ -161,6 +161,29 @@
 .settings-btn--danger { background: #7a1c1c; color: white; }
 .settings-btn--danger:hover:not(:disabled) { background: #962222; }
 
+.settings-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.6rem 0.75rem;
+    background: #171717;
+    border: 1px solid #303030;
+    border-radius: 10px;
+    color: #ddd;
+    font-size: 0.9rem;
+}
+
+.settings-toggle-row input[type='checkbox'] {
+    width: 1rem;
+    height: 1rem;
+    cursor: pointer;
+}
+
+.settings-toggle-row input[type='checkbox']:disabled {
+    cursor: not-allowed;
+}
+
 /* Delete confirm */
 .delete-confirm-box {
     display: flex;

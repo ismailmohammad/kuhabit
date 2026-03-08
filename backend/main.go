@@ -101,6 +101,8 @@ func main() {
 			auth.POST("/logout", handleLogout)
 			auth.GET("/me", requireAuth, handleMe)
 			auth.PUT("/password", requireAuth, handleChangePassword)
+			auth.POST("/welcome-seen", requireAuth, handleWelcomeSeen)
+			auth.PUT("/daily-spark", requireAuth, handleDailySparkPreference)
 		}
 
 		habits := api.Group("/habits")

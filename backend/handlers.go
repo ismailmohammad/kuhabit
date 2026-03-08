@@ -132,6 +132,10 @@ func todayComplete(habitID, userID uint) bool {
 	return count > 0
 }
 
+func isWelcomePending(user *User) bool {
+	return !user.WelcomeSeen
+}
+
 func longestStreakEver(h Habit, logs []HabitLog) int {
 	if len(logs) == 0 {
 		return 0
@@ -204,7 +208,12 @@ func handleRegister(c *gin.Context) {
 		return
 	}
 
-	user := User{Username: input.Username, Email: input.Email, Password: string(hash)}
+	user := User{
+		Username:          input.Username,
+		Email:             input.Email,
+		Password:          string(hash),
+		DailySparkEnabled: true,
+	}
 	if result := db.Create(&user); result.Error != nil {
 		errMsg := result.Error.Error()
 		if strings.Contains(errMsg, "username") || strings.Contains(errMsg, "unique") {
@@ -224,7 +233,14 @@ func handleRegister(c *gin.Context) {
 	session.Set("userID", fmt.Sprintf("%d", user.ID))
 	session.Save()
 
-	c.JSON(http.StatusCreated, gin.H{"id": user.ID, "username": user.Username, "email": user.Email})
+	showWelcome := isWelcomePending(&user)
+	c.JSON(http.StatusCreated, gin.H{
+		"id":                user.ID,
+		"username":          user.Username,
+		"email":             user.Email,
+		"showWelcome":       showWelcome,
+		"dailySparkEnabled": user.DailySparkEnabled,
+	})
 }
 
 func handleLogin(c *gin.Context) {
@@ -252,7 +268,14 @@ func handleLogin(c *gin.Context) {
 	session.Set("userID", fmt.Sprintf("%d", user.ID))
 	session.Save()
 
-	c.JSON(http.StatusOK, gin.H{"id": user.ID, "username": user.Username, "email": user.Email})
+	showWelcome := isWelcomePending(&user)
+	c.JSON(http.StatusOK, gin.H{
+		"id":                user.ID,
+		"username":          user.Username,
+		"email":             user.Email,
+		"showWelcome":       showWelcome,
+		"dailySparkEnabled": user.DailySparkEnabled,
+	})
 }
 
 func handleLogout(c *gin.Context) {
@@ -264,7 +287,38 @@ func handleLogout(c *gin.Context) {
 
 func handleMe(c *gin.Context) {
 	user := c.MustGet("user").(User)
-	c.JSON(http.StatusOK, gin.H{"id": user.ID, "username": user.Username, "email": user.Email})
+	showWelcome := isWelcomePending(&user)
+	c.JSON(http.StatusOK, gin.H{
+		"id":                user.ID,
+		"username":          user.Username,
+		"email":             user.Email,
+		"showWelcome":       showWelcome,
+		"dailySparkEnabled": user.DailySparkEnabled,
+	})
+}
+
+func handleWelcomeSeen(c *gin.Context) {
+	user := c.MustGet("user").(User)
+	if !user.WelcomeSeen {
+		db.Model(&user).UpdateColumn("welcome_seen", true)
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Welcome acknowledged"})
+}
+
+func handleDailySparkPreference(c *gin.Context) {
+	user := c.MustGet("user").(User)
+	var input struct {
+		Enabled *bool `json:"enabled" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil || input.Enabled == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "enabled is required"})
+		return
+	}
+	if err := db.Model(&user).UpdateColumn("daily_spark_enabled", *input.Enabled).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update daily spark preference"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"dailySparkEnabled": *input.Enabled})
 }
 
 func requireAuth(c *gin.Context) {
