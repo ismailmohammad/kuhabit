@@ -17,11 +17,11 @@ Basic session authentication
 
 Stack to be used:
 - Frontend:
-    - React (Design choice: one-way data binding, smaller bundle size compared to Angular, faster)
+    - React
 - Backend:
     - Go
 - Database:
-    - MySQL
+    - Postgres/Supabase
 - DevOps:
     - Tests with Cypress
     - Containerization

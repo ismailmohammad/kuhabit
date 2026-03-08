@@ -1,48 +1,123 @@
-.login-form {
-    color: black;
+.auth-page {
+    min-height: calc(100vh - 57px);
     display: flex;
-    flex-direction: row;
-    height: 100bh;
-    margin-top: 12.5%;
-    justify-content: center;
     align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    box-sizing: border-box;
 }
 
-.login-form label{
-    font-size: 3em;
+.auth-card {
+    background: #1e1e1e;
+    border: 1px solid #2a2a2a;
+    border-radius: 16px;
+    padding: 2.5rem 2rem;
     width: 100%;
-    margin: auto;
-    font-weight: bold;
+    max-width: 420px;
 }
 
-.login-form input {
-    width: 90%;
-    padding-left: 10%;
-    background: white;
-    font-size: 3em;
-    color: black;
-    border-radius:0.35em;
+.auth-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: white;
+    margin: 0 0 1.75rem;
 }
-.login-form form {
+
+.auth-form {
     display: flex;
     flex-direction: column;
+    gap: 0.5rem;
 }
 
-.form-button {
-    margin: 1em;
-    align-self: center;
-    justify-self: center;
-    padding: 1em;
+.auth-form label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #ccc;
+    margin-top: 0.75rem;
+}
+
+.auth-form input {
     width: 100%;
-    font-weight: bold;
-    background-color: lightgreen;
-    color: black;
-    &:hover {
-        transform: scale(1.02);
-    }
-    transition: all 0.2s ease-in-out;
+    padding: 0.65rem 0.85rem;
+    background: #121212;
+    border: 1px solid #333;
+    border-radius: 8px;
+    color: white;
+    font-size: 1rem;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+}
+
+.auth-form input:focus {
+    outline: none;
+    border-color: #2dca8e;
 }
 
 .forgot-password {
-    margin-top: 10px;
+    font-size: 0.8rem;
+    color: #888;
+    text-decoration: none;
+    margin-top: 0.25rem;
+    align-self: flex-end;
+}
+
+.forgot-password:hover {
+    color: #2dca8e;
+}
+
+.auth-submit {
+    margin-top: 1.25rem;
+    padding: 0.75rem;
+    width: 100%;
+    background: #2dca8e;
+    color: #111;
+    font-weight: 700;
+    font-size: 1rem;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.auth-submit:hover:not(:disabled) {
+    background: #25b07b;
+}
+
+.auth-submit:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.auth-switch {
+    margin-top: 1.5rem;
+    text-align: center;
+    font-size: 0.875rem;
+    color: #888;
+}
+
+.auth-switch a {
+    color: #2dca8e;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.auth-switch a:hover {
+    text-decoration: underline;
+}
+
+.optional-label {
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: #666;
+}
+
+.auth-warning {
+    font-size: 0.8rem;
+    color: #c8a030;
+    background: #1e1800;
+    border: 1px solid #3a2e00;
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    margin: 0.25rem 0 0;
+    line-height: 1.4;
 }

@@ -1,170 +1,157 @@
-import { useState } from "react";
-import styled from "styled-components";
-import './NewHabitModal.css'
+import React, { useState, useEffect } from "react";
+import './NewHabitModal.css';
+import { HabitType } from "../../types/habit";
 
 import CurbCube from '../../assets/cube-logo-red.png';
 import BuildCube from '../../assets/cube-logo-green.png';
-import { HabitType } from "../../types/habit";
 
-const HabitModal = styled.div`
-    height: 75vh;
-    width: 50vw;
-    border-radius: 1em;
-    padding: 1em;
-    position: absolute;
-    top: 10%;
-    left: 25%;
-    background-color: rgba(10, 10, 10, 0.90);
-    box-shadow: black;
-    transition: all ease-in-out;
-    overflow: auto;
-`;
-
-const CloseModalButton = styled.button`  
-    position: absolute;
-    right: 1em;
-    background-color: rgb(255, 80, 80);
-`;
-
-interface NewHabitModalProps {
-    showModal: boolean,
-    toggleModal: () => void,
-    createHabit: (habit: HabitType) => void 
+interface HabitModalProps {
+    showModal: boolean;
+    onClose: () => void;
+    onCreate: (name: string, recurrence: string, positiveType: boolean) => void;
+    onUpdate: (id: number, changes: Partial<Omit<HabitType, 'id'>>) => void;
+    habitToEdit: HabitType | null;
 }
 
-const NewHabitModal = (props: NewHabitModalProps) => {
-    const [habitName, setHabitName] = useState("");
-    const [positiveType, setPositiveType] = useState(false);
-    const [selection, setSelection] = useState<string>('Daily');
-    const [customDays, setCustomDays] = useState<{ [key: string]: boolean }>({
-        Su: false,
-        Mo: false,
-        Tu: false,
-        We: false,
-        Th: false,
-        Fr: false,
-        Sa: false,
-    });
+const PRESET_RECURRENCES: Record<string, string> = {
+    Daily: 'Su-Mo-Tu-We-Th-Fr-Sa',
+    Weekdays: 'Mo-Tu-We-Th-Fr',
+    Weekends: 'Su-Sa',
+};
 
-    const togglePositiveType = () => {
-        setPositiveType((prevType) => {
-            return!prevType
-        })
+const ALL_DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'] as const;
+const DAY_LABEL: Record<string, string> = {
+    Su: 'Sun', Mo: 'Mon', Tu: 'Tue', We: 'Wed', Th: 'Thu', Fr: 'Fri', Sa: 'Sat',
+};
+
+function recurrenceToCustomDays(rec: string): Record<string, boolean> {
+    const set = new Set(rec.split('-'));
+    return Object.fromEntries(ALL_DAYS.map(d => [d, set.has(d)]));
+}
+
+function detectPreset(rec: string): string {
+    for (const [label, val] of Object.entries(PRESET_RECURRENCES)) {
+        if (val === rec) return label;
     }
+    return 'Custom';
+}
 
-    const handleSelectChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-        setSelection(event.target.value);
-      };
-    
-      const handleCheckboxChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        setCustomDays({
-          ...customDays,
-          [event.target.name]: event.target.checked,
-        });
-      };
+const HabitModal = ({ showModal, onClose, onCreate, onUpdate, habitToEdit }: HabitModalProps) => {
+    const isEdit = habitToEdit !== null;
 
-      const dayLabels: { [key: string]: string } = {
-        Su: 'Sunday',
-        Mo: 'Monday',
-        Tu: 'Tuesday',
-        We: 'Wednesday',
-        Th: 'Thursday',
-        Fr: 'Friday',
-        Sa: 'Saturday',
-      };
+    const [name, setName] = useState('');
+    const [positiveType, setPositiveType] = useState(false);
+    const [preset, setPreset] = useState<string>('Daily');
+    const [customDays, setCustomDays] = useState<Record<string, boolean>>(
+        Object.fromEntries(ALL_DAYS.map(d => [d, false]))
+    );
 
-      const generateRecurrenceString = () => {
-        return Object.keys(customDays)
-          .filter((day) => customDays[day])
-          .join('-');
-      };
+    // Populate form when editing
+    useEffect(() => {
+        if (habitToEdit) {
+            setName(habitToEdit.name);
+            setPositiveType(habitToEdit.positiveType);
+            const p = detectPreset(habitToEdit.recurrence);
+            setPreset(p);
+            if (p === 'Custom') setCustomDays(recurrenceToCustomDays(habitToEdit.recurrence));
+        } else {
+            setName('');
+            setPositiveType(false);
+            setPreset('Daily');
+            setCustomDays(Object.fromEntries(ALL_DAYS.map(d => [d, false])));
+        }
+    }, [habitToEdit, showModal]);
 
-      const addHabit = (e: React.FormEvent) => {
+    if (!showModal) return null;
+
+    const buildRecurrence = (): string => {
+        if (preset !== 'Custom') return PRESET_RECURRENCES[preset];
+        return ALL_DAYS.filter(d => customDays[d]).join('-') || 'Su';
+    };
+
+    const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        let recurrence = "Su-Mo-Tu-We-Th-Fr-Sa";
-        if (selection === "Weekdays") {
-            recurrence = "Mo-Tu-We-Th-Fr";
-        } else if (selection === "Weekends") {
-            recurrence = "Su-Sa";
-        } else if (selection === "Custom") {
-            recurrence = generateRecurrenceString();
-
+        const recurrence = buildRecurrence();
+        if (isEdit && habitToEdit) {
+            onUpdate(habitToEdit.id, { name, recurrence, positiveType });
+        } else {
+            onCreate(name, recurrence, positiveType);
         }
-        const newHabit: HabitType = {
-            id: 0,
-            name: habitName,
-            complete: false,
-            positiveType: positiveType,
-            recurrence: recurrence
-        }
-        props.createHabit(newHabit);
-        console.log("clicked");
-        setHabitName("");
-        props.toggleModal();
-      }
+        onClose();
+    };
 
-    
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal-box" onClick={e => e.stopPropagation()}>
+                <div className="modal-header">
+                    <h2 className="modal-title">{isEdit ? 'Edit Habit' : 'New Habit'}</h2>
+                    <button className="modal-close" onClick={onClose} aria-label="Close">✕</button>
+                </div>
 
-    return props.showModal ? (
-        <HabitModal>
-            <CloseModalButton onClick={props.toggleModal}>Close</CloseModalButton>
-            <form onSubmit={addHabit}>
-            <h1>Add a new habit</h1>
-            <h2>Habit Name</h2>
-            <input
-                className="habit-name"
-                type="text"
-                value={habitName}
-                onChange={(e) => setHabitName(e.target.value)}
-                required
-            />
-            <h2>Is this a habit you're trying to curb or build?</h2>
-            <div className="curb-build-switch-container">
-                <img className="cube-toggle-logo" src={CurbCube}></img>
-                <h4>Curb</h4>
-                <label className="switch">
-                    <input type="checkbox" 
-                        checked={positiveType}
-                        onChange={() => {togglePositiveType()}}
+                <form onSubmit={handleSubmit} className="modal-form">
+                    <label className="modal-label">Habit name</label>
+                    <input
+                        className="modal-input"
+                        type="text"
+                        value={name}
+                        onChange={e => setName(e.target.value)}
+                        placeholder="e.g. Read 20 pages"
+                        required
+                        autoFocus
                     />
-                    <span className="slider round"></span>
-                </label>
-                <h4>Build</h4>
-                <img src={BuildCube} className="cube-toggle-logo"></img>
-            </div>
-            <h2>Recurrence</h2>
-                <label className="select-schedule">
-                    Select Schedule:
-                </label>
-                <select className="select-schedule-options" value={selection} onChange={handleSelectChange}>
-                        <option value="Daily">Daily</option>
-                        <option value="Weekdays">Weekdays</option>
-                        <option value="Weekends">Weekends</option>
-                        <option value="Custom">Custom</option>
-                    </select>
-                {selection === 'Custom' && (
-                    <div>
-                        <h3>Select Days:</h3>
-                        {Object.keys(dayLabels).map((day) => (
-                            <div className="days-selected">
-                                <label key={day}>
-                                    {dayLabels[day]}
-                                </label>
-                                <input
-                                    type="checkbox"
-                                    name={day}
-                                    key={day}
-                                    checked={customDays[day]}
-                                    onChange={handleCheckboxChange}
-                                />
-                            </div>
+
+                    <label className="modal-label">Type</label>
+                    <div className="type-toggle">
+                        <img src={CurbCube} className="type-icon" alt="Curb" />
+                        <span className={!positiveType ? 'type-label type-label--active' : 'type-label'}>Curb</span>
+                        <label className="switch">
+                            <input
+                                type="checkbox"
+                                checked={positiveType}
+                                onChange={() => setPositiveType(p => !p)}
+                            />
+                            <span className="slider round"></span>
+                        </label>
+                        <span className={positiveType ? 'type-label type-label--active' : 'type-label'}>Build</span>
+                        <img src={BuildCube} className="type-icon" alt="Build" />
+                    </div>
+
+                    <label className="modal-label">Recurrence</label>
+                    <div className="recurrence-presets">
+                        {Object.keys(PRESET_RECURRENCES).concat('Custom').map(p => (
+                            <button
+                                key={p}
+                                type="button"
+                                className={`preset-btn ${preset === p ? 'preset-btn--active' : ''}`}
+                                onClick={() => setPreset(p)}
+                            >
+                                {p}
+                            </button>
                         ))}
                     </div>
-                )}
-                <button className="create-habit-button" type="submit">Queue Habit</button>
-            </form>
-        </HabitModal>
-    ) : null;
-}
 
-export default NewHabitModal;
+                    {preset === 'Custom' && (
+                        <div className="custom-days">
+                            {ALL_DAYS.map(day => (
+                                <label key={day} className={`day-toggle ${customDays[day] ? 'day-toggle--on' : ''}`}>
+                                    <input
+                                        type="checkbox"
+                                        checked={customDays[day]}
+                                        onChange={e => setCustomDays(prev => ({ ...prev, [day]: e.target.checked }))}
+                                    />
+                                    {DAY_LABEL[day]}
+                                </label>
+                            ))}
+                        </div>
+                    )}
+
+                    <button className="modal-submit" type="submit">
+                        {isEdit ? 'Save Changes' : 'Add Habit'}
+                    </button>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+export default HabitModal;

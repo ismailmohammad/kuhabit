@@ -2,48 +2,56 @@ import { HabitType } from '../../types/habit';
 import './Habit.css';
 
 interface HabitProps {
-    habitData: HabitType,
-    imgSrc: string,
-    deleteHabit: (id: number) => void,
-    completeDailyHabit: (id: number) => void,
+    habitData: HabitType;
+    imgSrc: string;
+    onToggleComplete: (habit: HabitType) => void;
+    onDelete: (id: number) => void;
+    onEdit: (habit: HabitType) => void;
 }
 
-function Habit(props: HabitProps) {
+const DAY_FULL: Record<string, string> = {
+    Su: 'Sun', Mo: 'Mon', Tu: 'Tue', We: 'Wed', Th: 'Thu', Fr: 'Fri', Sa: 'Sat',
+};
 
-    const { habitData, deleteHabit, imgSrc, completeDailyHabit} = props;
+function Habit({ habitData, imgSrc, onToggleComplete, onDelete, onEdit }: HabitProps) {
+    // Sunday → Su, Monday → Mo, etc.
+    const todayKey = (() => {
+        const d = new Date().getDay(); // 0=Sun
+        const keys = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+        return keys[d];
+    })();
 
-    function deleteHabitBackend() {
-        deleteHabit(habitData.id);
-    }
-
-    function markHabitComplete() {
-        if (habitData.complete) return;
-        completeDailyHabit(habitData.id);
-    }
+    const days = habitData.recurrence.split('-');
 
     return (
-        <div className='habit-outer'>
-            <img className={`cube-logo ${habitData.complete ? "" : "jiggle-on-hover"}`} src={imgSrc} alt='Cube logo indicating habit completeness'
-                onClick={markHabitComplete}>
+        <div className={`habit-card ${habitData.complete ? 'habit-card--complete' : ''}`}>
+            <button
+                className={`habit-cube-btn ${habitData.complete ? '' : 'jiggle-on-hover'}`}
+                onClick={() => onToggleComplete(habitData)}
+                title={habitData.complete ? 'Mark incomplete' : 'Mark complete'}
+                aria-label={habitData.complete ? 'Mark incomplete' : 'Mark complete'}
+            >
+                <img className="cube-logo" src={imgSrc} alt="" />
+            </button>
 
-            </img>
-            <h2 className='habit-text'>{habitData.name}</h2>
-            {/* Recurrences */}
-            <div className='recurring-frequency-container'>
-                <h3>Recurring:</h3>
-                <div className='recurring-days'>
-                    {habitData.recurrence.split('-').map((day: string) => {
-                        if (new Date().toLocaleDateString('en-US', {weekday: 'long'}).startsWith(day)) {
-                            const markActiveDay = habitData.complete ? 'day active-day' : 'day active-day-complete'
-                            return <h4 className={markActiveDay}>{day}</h4>
-                        }
-                        return (<h4 className='day'>{day}</h4>)
-                    })}
+            <div className="habit-body">
+                <p className="habit-name">{habitData.name}</p>
+                <div className="habit-days">
+                    {days.map(day => (
+                        <span
+                            key={day}
+                            className={`day-chip ${day === todayKey ? (habitData.complete ? 'day-chip--today-done' : 'day-chip--today') : ''}`}
+                            title={DAY_FULL[day] ?? day}
+                        >
+                            {day}
+                        </span>
+                    ))}
                 </div>
             </div>
-            <div className='habit-edit-actions'>
-                <button className='edit-habit'>Modify</button>
-                <button className='remove-habit' onClick={deleteHabitBackend}>Remove</button>
+
+            <div className="habit-actions">
+                <button className="btn-edit" onClick={() => onEdit(habitData)}>Edit</button>
+                <button className="btn-remove" onClick={() => onDelete(habitData.id)}>Remove</button>
             </div>
         </div>
     );

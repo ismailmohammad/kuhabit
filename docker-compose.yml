@@ -1,0 +1,16 @@
+services:
+  backend:
+    build: ./backend
+    restart: on-failure
+    environment:
+      DB_DSN: ${DB_DSN}
+      SESSION_SECRET: ${SESSION_SECRET}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost}
+      PORT: "9090"
+
+  frontend:
+    build: ./kuhabit-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend

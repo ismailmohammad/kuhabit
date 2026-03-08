@@ -2,181 +2,273 @@ import styled from "styled-components";
 import Header from "../Header";
 import Habit from "./Habit";
 import { HabitType } from "../../types/habit";
-/**
- * Habit Curbing Logo Images
- */
+import { useState, useEffect } from "react";
+import HabitModal from "./NewHabitModal";
+import toast from "react-hot-toast";
+import { api } from "../../api/api";
+import { useNavigate } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
+import { setUserInfo } from "../../redux/userSlice";
+import type { RootState } from "../../redux/store";
+
 import CubeRed from '../../assets/cube-logo-red.png';
 import CubeRedTop from '../../assets/cube-logo-red-top.png';
 import CubeRedRight from '../../assets/cube-logo-red-right.png';
 import CubeRedLeft from '../../assets/cube-logo-red-left.png';
-
-/**
- * Positive Habit Logo Images
- */
 import CubeGreen from '../../assets/cube-logo-green.png';
 import CubeGreenTop from '../../assets/cube-logo-green-top.png';
 import CubeGreenRight from '../../assets/cube-logo-green-right.png';
 import CubeGreenLeft from '../../assets/cube-logo-green-left.png';
-import { useState } from "react";
-import NewHabitModal from "./NewHabitModal";
-import toast from "react-hot-toast";
 
-const negativeHabitLogos = [CubeRedTop, CubeRedRight, CubeRedLeft];
-const positiveHabitLogos = [CubeGreenLeft, CubeGreenRight, CubeGreenTop];
+const negativeLogos = [CubeRedTop, CubeRedRight, CubeRedLeft];
+const positiveLogos = [CubeGreenLeft, CubeGreenRight, CubeGreenTop];
 
 function getRandomCubeLogo(positive: boolean): string {
-    const images: string[] = positive ? positiveHabitLogos : negativeHabitLogos;
-    const randomIndex = Math.floor(Math.random() * images.length);
-    return images[randomIndex];
+    const images = positive ? positiveLogos : negativeLogos;
+    return images[Math.floor(Math.random() * images.length)];
 }
 
-const DashboardContainer = styled.div`
-    display:flex;
+const Page = styled.div`
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 1.5rem 1rem;
+`;
 
-    padding: 1em;
-    flex-direction: column;
+const PageHeader = styled.div`
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+`;
+
+const PageTitle = styled.div``;
+
+const DayLabel = styled.p`
+    color: #888;
+    margin: 0.25rem 0 0;
+    font-size: 0.95rem;
+`;
+
+const AddButton = styled.button`
+    background: #2dca8e;
+    color: #111;
+    font-weight: 700;
+    border: none;
+    border-radius: 10px;
+    padding: 0.6rem 1.25rem;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: background 0.2s;
+    &:hover { background: #25b07b; }
 `;
 
 const HabitsContainer = styled.div`
     display: flex;
-    background: rgba(10, 10, 10, 0.274)    ;
-    min-height: 50vh;
-    border-radius: 2em;
     flex-direction: column;
+    gap: 0.75rem;
 `;
 
-const AddHabitContainer = styled.div`
-display: flex;
-    justify-content: flex-end;
-    width: 100%;
+const EmptyState = styled.div`
+    text-align: center;
+    padding: 4rem 1rem;
+    color: #666;
+    background: #1a1a1a;
+    border: 1px dashed #333;
+    border-radius: 12px;
 `;
 
-
-const AddHabitButton = styled.button`
-    max-width: 25%;
-    margin: 1em;
-    justify-self: flex-end;
-    background: #5ec48cab;
+const LoadingState = styled.div`
+    text-align: center;
+    padding: 4rem 1rem;
+    color: #888;
 `;
 
-
-
-
-
-
+const SectionLabel = styled.h2`
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #666;
+    margin: 1.5rem 0 0.5rem;
+`;
 
 export default function Dashboard() {
+    const [habits, setHabits] = useState<HabitType[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [modalOpen, setModalOpen] = useState(false);
+    const [habitToEdit, setHabitToEdit] = useState<HabitType | null>(null);
 
-    type HabitsState = {
-        [key: number]: HabitType;
-    };
+    const navigate = useNavigate();
+    const dispatch = useDispatch();
+    const userInfo = useSelector((state: RootState) => state.user.userInfo);
 
-    const [mockHabits, setMockHabits] = useState<HabitsState>({
-        1: {
-            id: 1,
-            name: "Read a chapter from book",
-            complete: false,
-            recurrence: "Su-Mo-Tu-We-Th-Fr-Sa",
-            positiveType: true
-        },
-        2: {
-            id: 2,
-            name: "Don't use phone more than an hour",
-            complete: false,
-            recurrence: "Mo-Tu-We-Th-Fr",
-            positiveType: false
-        },
-        3: {
-            id: 3,
-            name: "Don't eat any sugary snacks.",
-            complete: true,
-            recurrence: "Su-Mo-Tu-We-Th-Fr-Sa",
-            positiveType: false
-        },
-        4: {
-            id: 4,
-            name: "Have 20 grams of protein",
-            complete: true,
-            recurrence: "Su-Mo-Tu-We-Th-Fr-Sa",
-            positiveType: true
+    // Stable logo map so icons don't re-randomize on re-render
+    const [logoMap] = useState<Map<number, string>>(new Map());
+
+    function getLogo(habit: HabitType): string {
+        if (habit.complete) return habit.positiveType ? CubeGreen : CubeRed;
+        if (!logoMap.has(habit.id)) {
+            logoMap.set(habit.id, getRandomCubeLogo(habit.positiveType));
         }
-    });
+        return logoMap.get(habit.id)!;
+    }
 
-    const deleteHabit = (id: number) => {
-        const update: boolean = confirm("Confirm deletion of habit?");
-        if (!update) return;
-    
-        const { [id]: deletedHabit, ...rest } = mockHabits;
-        setMockHabits(rest);
-    };
-
-    const completeDailyHabit = (id: number) => {
-        const update: boolean = confirm("Mark habit as complete for today?");
-        if (!update) return;
-    
-        setMockHabits((prevHabits) => {
-            const updatedHabits: any = { ...prevHabits };
-            if (updatedHabits[id]) {
-                updatedHabits[id].complete = true;
+    useEffect(() => {
+        let cancelled = false;
+        async function load() {
+            try {
+                // Hydrate user info if missing (e.g. page refresh)
+                if (!userInfo) {
+                    const me = await api.auth.me();
+                    if (!cancelled) dispatch(setUserInfo(me));
+                }
+                const data = await api.habits.list();
+                if (!cancelled) setHabits(data);
+            } catch {
+                if (!cancelled) {
+                    navigate("/login");
+                }
+            } finally {
+                if (!cancelled) setLoading(false);
             }
-            toast.success(`Marked '${updatedHabits[id].name}' as complete`)
-            return updatedHabits;
-        })
+        }
+        load();
+        return () => { cancelled = true; };
+    }, []);
+
+    const handleToggleComplete = async (habit: HabitType) => {
+        const next = !habit.complete;
+        setHabits(prev => prev.map(h => h.id === habit.id ? { ...h, complete: next } : h));
+        try {
+            await api.habits.update(habit.id, { complete: next });
+            toast.success(next ? `✓ "${habit.name}" complete` : `↩ "${habit.name}" reset`);
+        } catch (err: any) {
+            // Rollback
+            setHabits(prev => prev.map(h => h.id === habit.id ? habit : h));
+            toast.error(err.message || "Update failed");
+        }
     };
 
-    function formatDate(date: Date) {
-        return date.toLocaleDateString('en-US', {weekday: 'long', month: 'long', day: 'numeric'});
-    }
-    
-    const date = formatDate(new Date());
-    
-    // New Habit Modal
-    const [showModal, setShowModal] = useState(false);
-    const toggleModal = () => {
-        setShowModal(!showModal);
+    const handleDelete = async (id: number) => {
+        const habit = habits.find(h => h.id === id);
+        setHabits(prev => prev.filter(h => h.id !== id));
+        try {
+            await api.habits.remove(id);
+            toast.success(`Removed "${habit?.name}"`);
+        } catch (err: any) {
+            // Rollback
+            if (habit) setHabits(prev => [...prev, habit].sort((a, b) => a.id - b.id));
+            toast.error(err.message || "Delete failed");
+        }
     };
 
-    const generateUniqueId = (): number => {
-        let newId = Math.floor(Math.random() * 10000);
-        while (mockHabits[newId]) {
-          newId = Math.floor(Math.random() * 10000);
+    const handleCreate = async (name: string, recurrence: string, positiveType: boolean) => {
+        try {
+            const newHabit = await api.habits.create(name, recurrence, positiveType);
+            setHabits(prev => [...prev, newHabit]);
+            toast.success(`"${newHabit.name}" added`);
+        } catch (err: any) {
+            toast.error(err.message || "Failed to create habit");
         }
-        return newId;
-      };
+    };
 
-    const createHabit = (habit: HabitType) => {
-        const newHabit: HabitType = {
-            id: generateUniqueId(),
-            complete: false,
-            name: habit.name,
-            recurrence: habit.recurrence,
-            positiveType: habit.positiveType
+    const handleUpdate = async (id: number, changes: Partial<Omit<HabitType, 'id'>>) => {
+        try {
+            const updated = await api.habits.update(id, changes);
+            setHabits(prev => prev.map(h => h.id === id ? updated : h));
+            toast.success("Habit updated");
+        } catch (err: any) {
+            toast.error(err.message || "Update failed");
         }
-        setMockHabits((prevHabits) => {
-            return { ...prevHabits, [newHabit.id]: newHabit };
-        });
-    }
+    };
 
-    return(
+    const openEdit = (habit: HabitType) => {
+        setHabitToEdit(habit);
+        setModalOpen(true);
+    };
+
+    const closeModal = () => {
+        setModalOpen(false);
+        setHabitToEdit(null);
+    };
+
+    const date = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+
+    const incomplete = habits.filter(h => !h.complete);
+    const complete = habits.filter(h => h.complete);
+
+    return (
         <>
-            <Header staticHeader={true}/>   
-            <DashboardContainer>
-                <h1 style={{ color: "black"}}>Welcome [PlaceholderUsername],<br/><span>{date}</span></h1>
-                <AddHabitContainer>
-                    <AddHabitButton onClick={toggleModal}>Queue New Habit</AddHabitButton>
-                </AddHabitContainer>
-                <HabitsContainer>
-                    {Object.values(mockHabits).map((habit: HabitType) => {
-                        // Determine logo type (if habit is complete display filled in cube otherwise, grab a random logo)
-                        let imgSrc = getRandomCubeLogo(habit.positiveType);
-                        if (habit.complete) {
-                            imgSrc = habit.positiveType ? CubeGreen : CubeRed;
-                        }
-                        return <Habit key={habit.id} habitData={habit} imgSrc={imgSrc} deleteHabit={deleteHabit} completeDailyHabit={completeDailyHabit}></Habit>
-                    })}
-                </HabitsContainer>
-            </DashboardContainer>
-            <NewHabitModal showModal={showModal} toggleModal={toggleModal} createHabit={createHabit}></NewHabitModal>
+            <Header />
+            <Page>
+                <PageHeader>
+                    <PageTitle>
+                        <h1 style={{ margin: 0, fontSize: "clamp(1.4rem, 4vw, 2rem)" }}>
+                            {userInfo ? `Hey, ${userInfo.username}` : 'Dashboard'}
+                        </h1>
+                        <DayLabel>{date}</DayLabel>
+                    </PageTitle>
+                    <AddButton onClick={() => { setHabitToEdit(null); setModalOpen(true); }}>
+                        + New Habit
+                    </AddButton>
+                </PageHeader>
+
+                {loading ? (
+                    <LoadingState>Loading your habits…</LoadingState>
+                ) : habits.length === 0 ? (
+                    <EmptyState>
+                        <p style={{ fontSize: "1.1rem", marginBottom: "0.5rem" }}>No habits yet.</p>
+                        <p style={{ fontSize: "0.9rem" }}>Click <strong>+ New Habit</strong> to queue your first one.</p>
+                    </EmptyState>
+                ) : (
+                    <>
+                        {incomplete.length > 0 && (
+                            <>
+                                <SectionLabel>To Do — {incomplete.length}</SectionLabel>
+                                <HabitsContainer>
+                                    {incomplete.map(habit => (
+                                        <Habit
+                                            key={habit.id}
+                                            habitData={habit}
+                                            imgSrc={getLogo(habit)}
+                                            onToggleComplete={handleToggleComplete}
+                                            onDelete={handleDelete}
+                                            onEdit={openEdit}
+                                        />
+                                    ))}
+                                </HabitsContainer>
+                            </>
+                        )}
+                        {complete.length > 0 && (
+                            <>
+                                <SectionLabel>Completed — {complete.length}</SectionLabel>
+                                <HabitsContainer>
+                                    {complete.map(habit => (
+                                        <Habit
+                                            key={habit.id}
+                                            habitData={habit}
+                                            imgSrc={getLogo(habit)}
+                                            onToggleComplete={handleToggleComplete}
+                                            onDelete={handleDelete}
+                                            onEdit={openEdit}
+                                        />
+                                    ))}
+                                </HabitsContainer>
+                            </>
+                        )}
+                    </>
+                )}
+            </Page>
+
+            <HabitModal
+                showModal={modalOpen}
+                onClose={closeModal}
+                onCreate={handleCreate}
+                onUpdate={handleUpdate}
+                habitToEdit={habitToEdit}
+            />
         </>
     );
 }

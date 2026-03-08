@@ -3,49 +3,70 @@ import Header from "../Header";
 import "./LoginPage.css";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
+import { api } from "../../api/api";
+import { useDispatch } from "react-redux";
+import { setUserInfo } from "../../redux/userSlice";
 
 const LoginPage = () => {
-    const [email, setEmail] = useState('');
+    const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
+    const [loading, setLoading] = useState(false);
 
     const navigate = useNavigate();
+    const dispatch = useDispatch();
 
-    const handleLogin = (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (email === "a@b.com" && password === "password") {
-            toast.success("Successfully logged in.");
-            navigate("/dashboard")
-        } else {
-            toast.error("Email or password is incorrect");
+        setLoading(true);
+        try {
+            const user = await api.auth.login(username, password);
+            dispatch(setUserInfo(user));
+            toast.success("Welcome back!");
+            navigate("/dashboard");
+        } catch (err: any) {
+            toast.error(err.message || "Login failed");
+        } finally {
+            setLoading(false);
         }
-    }
+    };
 
     return (
         <>
-            <Header staticHeader={true}></Header>
-            <div className="login-form ">
-                <form onSubmit={handleLogin}>
-                    <label>Email</label>
-                    <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
-                    />
-                    <label>Password</label>
-                    <input
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
-                        minLength={8}
-                    />
-                    <Link to="/forgot" className="forgot-password">Forgot your password?</Link>
-                    <button className="form-button" type="submit">Login</button>
-                </form>
+            <Header />
+            <div className="auth-page">
+                <div className="auth-card">
+                    <h1 className="auth-title">Log in</h1>
+                    <form onSubmit={handleLogin} className="auth-form">
+                        <label>Username</label>
+                        <input
+                            type="text"
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
+                            placeholder="your_username"
+                            required
+                            autoComplete="username"
+                        />
+                        <label>Password</label>
+                        <input
+                            type="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            placeholder="••••••••"
+                            required
+                            minLength={8}
+                            autoComplete="current-password"
+                        />
+                        <button className="auth-submit" type="submit" disabled={loading}>
+                            {loading ? "Logging in…" : "Log in"}
+                        </button>
+                    </form>
+                    <p className="auth-switch">
+                        Don't have an account? <Link to="/register">Get started</Link>
+                    </p>
+                </div>
             </div>
         </>
     );
-}
+};
 
-export default LoginPage
+export default LoginPage;
