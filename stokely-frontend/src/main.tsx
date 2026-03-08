@@ -5,7 +5,7 @@ import ErrorPage from './ErrorPage.tsx'
 import Dashboard from './components/Dashboard/Dashboard.tsx'
 import RegisterPage from './components/UserActionPages/RegisterPage.tsx'
 import './index.css'
-import store from './redux/store';
+import store from './redux/store.ts';
 import { Provider } from 'react-redux'
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import LoginPage from './components/UserActionPages/LoginPage.tsx'
