@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import toast from "react-hot-toast";
 import './NewHabitModal.css';
 import { HabitType } from "../../types/habit";
@@ -17,6 +17,7 @@ interface HabitModalProps {
         icon?: string; recurrenceEnd?: string | null; notes?: string; reminderTime?: string;
     }) => void;
     onUpdate: (id: number, changes: Record<string, unknown>) => void;
+    onDelete: (id: number) => void;
     habitToEdit: HabitType | null;
 }
 
@@ -59,6 +60,64 @@ function utcTimeToLocal(utcTime: string): string {
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+function formatLocalTime(value: string): string {
+    if (!value) return '';
+    const [h24, m] = value.split(':').map(Number);
+    const ampm = h24 < 12 ? 'AM' : 'PM';
+    const h12 = h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24;
+    return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+}
+
+// ── Time Picker ────────────────────────────────────────────────────────────────
+
+function TimePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+    const parsed = value ? value.split(':').map(Number) : null;
+    const h24 = parsed ? parsed[0] : 8;
+    const mins = parsed ? parsed[1] : 0;
+    const isPM = h24 >= 12;
+    const h12 = h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24;
+
+    const emit = (newH12: number, newMins: number, newIsPM: boolean) => {
+        let newH24 = newH12 % 12;
+        if (newIsPM) newH24 += 12;
+        onChange(`${String(newH24).padStart(2, '0')}:${String(newMins).padStart(2, '0')}`);
+    };
+
+    return (
+        <div className="time-picker">
+            <select
+                className="time-select"
+                value={h12}
+                onChange={e => emit(Number(e.target.value), mins, isPM)}
+            >
+                {[12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(h => (
+                    <option key={h} value={h}>{h}</option>
+                ))}
+            </select>
+            <span className="time-sep">:</span>
+            <select
+                className="time-select"
+                value={mins}
+                onChange={e => emit(h12, Number(e.target.value), isPM)}
+            >
+                {Array.from({ length: 12 }, (_, i) => i * 5).map(m => (
+                    <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
+                ))}
+            </select>
+            <select
+                className="time-select time-ampm"
+                value={isPM ? 'PM' : 'AM'}
+                onChange={e => emit(h12, mins, e.target.value === 'PM')}
+            >
+                <option value="AM">AM</option>
+                <option value="PM">PM</option>
+            </select>
+        </div>
+    );
+}
+
+// ── Icon Picker ────────────────────────────────────────────────────────────────
+
 function IconPicker({ selected, onSelect }: { selected: string; onSelect: (name: string) => void }) {
     const [search, setSearch] = useState('');
     const entries = Object.entries(HABIT_ICONS).filter(([name]) =>
@@ -90,11 +149,18 @@ function IconPicker({ selected, onSelect }: { selected: string; onSelect: (name:
     );
 }
 
-const HabitModal = ({ showModal, onClose, onCreate, onUpdate, habitToEdit }: HabitModalProps) => {
+// ── Modal ──────────────────────────────────────────────────────────────────────
+
+const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToEdit }: HabitModalProps) => {
     const isEdit = habitToEdit !== null;
 
+    // Animation state
+    const [mounted, setMounted] = useState(false);
+    const [closing, setClosing] = useState(false);
+
+    // Form state
     const [name, setName] = useState('');
-    const [positiveType, setPositiveType] = useState(false);
+    const [positiveType, setPositiveType] = useState(true);
     const [preset, setPreset] = useState<string>('Daily');
     const [customDays, setCustomDays] = useState<Record<string, boolean>>(
         Object.fromEntries(ALL_DAYS.map(d => [d, false]))
@@ -105,6 +171,25 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, habitToEdit }: Hab
     const [useEndDate, setUseEndDate] = useState(false);
     const [notes, setNotes] = useState('');
     const [reminderTime, setReminderTime] = useState('');
+
+    // End habit confirm state
+    const [showEndConfirm, setShowEndConfirm] = useState(false);
+    const [endAck, setEndAck] = useState(false);
+
+    useEffect(() => {
+        if (showModal) {
+            setMounted(true);
+            setClosing(false);
+        }
+    }, [showModal]);
+
+    const handleClose = useCallback(() => {
+        setClosing(true);
+        setTimeout(() => {
+            setMounted(false);
+            onClose();
+        }, 180);
+    }, [onClose]);
 
     useEffect(() => {
         if (habitToEdit) {
@@ -125,7 +210,7 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, habitToEdit }: Hab
             }
         } else {
             setName('');
-            setPositiveType(false);
+            setPositiveType(true);
             setPreset('Daily');
             setCustomDays(Object.fromEntries(ALL_DAYS.map(d => [d, false])));
             setIcon('');
@@ -135,9 +220,11 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, habitToEdit }: Hab
             setUseEndDate(false);
             setRecurrenceEnd('');
         }
+        setShowEndConfirm(false);
+        setEndAck(false);
     }, [habitToEdit, showModal]);
 
-    if (!showModal) return null;
+    if (!mounted) return null;
 
     const buildRecurrence = (): string => {
         if (preset !== 'Custom') return PRESET_RECURRENCES[preset];
@@ -152,7 +239,6 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, habitToEdit }: Hab
         const utcReminder = localTimeToUTC(reminderTime);
         const endDate = useEndDate && recurrenceEnd ? recurrenceEnd : null;
 
-        // Register push subscription if reminder is set
         if (reminderTime) {
             try {
                 const reg = await registerServiceWorker();
@@ -192,17 +278,21 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, habitToEdit }: Hab
                 recurrenceEnd: endDate,
             });
         }
-        onClose();
+        handleClose();
+    };
+
+    const handleEnd = () => {
+        if (habitToEdit) onDelete(habitToEdit.id);
     };
 
     const SelectedIcon = icon ? HABIT_ICONS[icon] : null;
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-box" onClick={e => e.stopPropagation()}>
+        <div className={`modal-overlay${closing ? ' modal-overlay--out' : ''}`} onClick={handleClose}>
+            <div className={`modal-box${closing ? ' modal-box--out' : ''}`} onClick={e => e.stopPropagation()}>
                 <div className="modal-header">
                     <h2 className="modal-title">{isEdit ? 'Edit Habit' : 'New Habit'}</h2>
-                    <button className="modal-close" onClick={onClose} aria-label="Close">✕</button>
+                    <button className="modal-close" onClick={handleClose} aria-label="Close">✕</button>
                 </div>
 
                 <form onSubmit={handleSubmit} className="modal-form">
@@ -315,28 +405,83 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, habitToEdit }: Hab
 
                     {/* Reminder */}
                     <label className="modal-label">Reminder time (optional)</label>
-                    <div className="reminder-row">
-                        <input
-                            type="time"
-                            className="modal-input"
-                            value={reminderTime}
-                            onChange={e => setReminderTime(e.target.value)}
-                        />
-                        {reminderTime && (
-                            <button type="button" className="btn-clear-time" onClick={() => setReminderTime('')}>
-                                Clear
-                            </button>
-                        )}
-                    </div>
-                    {reminderTime && (
-                        <p className="modal-hint">
-                            You'll get a push notification if this habit isn't done by this time.
-                        </p>
+                    {!reminderTime ? (
+                        <button
+                            type="button"
+                            className="btn-set-reminder"
+                            onClick={() => setReminderTime('08:00')}
+                        >
+                            + Set a reminder
+                        </button>
+                    ) : (
+                        <>
+                            <div className="reminder-row">
+                                <TimePicker value={reminderTime} onChange={setReminderTime} />
+                                <button type="button" className="btn-clear-time" onClick={() => setReminderTime('')}>
+                                    Clear
+                                </button>
+                            </div>
+                            <p className="modal-hint">
+                                Reminder set for {formatLocalTime(reminderTime)} — you'll get a push notification if this habit isn't done by then.
+                            </p>
+                        </>
                     )}
 
                     <button className="modal-submit" type="submit">
                         {isEdit ? 'Save Changes' : 'Add Habit'}
                     </button>
+
+                    {/* End Habit (edit mode only) */}
+                    {isEdit && (
+                        <div className="danger-zone">
+                            <div className="danger-divider" />
+                            {!showEndConfirm ? (
+                                <div className="end-habit-row">
+                                    <button
+                                        type="button"
+                                        className="btn-end-habit"
+                                        onClick={() => setShowEndConfirm(true)}
+                                    >
+                                        End Habit
+                                    </button>
+                                    <span className="end-habit-hint">
+                                        Mark this habit as complete — whether it's a new habit you've built or a bad one you've curbed.
+                                    </span>
+                                </div>
+                            ) : (
+                                <div className="end-confirm">
+                                    <p className="end-confirm-warning">
+                                        ⚠️ This will permanently remove the habit and all its history.
+                                    </p>
+                                    <label className="end-confirm-ack">
+                                        <input
+                                            type="checkbox"
+                                            checked={endAck}
+                                            onChange={e => setEndAck(e.target.checked)}
+                                        />
+                                        I understand — remove it permanently
+                                    </label>
+                                    <div className="end-confirm-actions">
+                                        <button
+                                            type="button"
+                                            className="btn-end-cancel"
+                                            onClick={() => { setShowEndConfirm(false); setEndAck(false); }}
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="btn-end-confirm"
+                                            disabled={!endAck}
+                                            onClick={handleEnd}
+                                        >
+                                            End Habit
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* E2E Encryption placeholder */}
                     <div className="e2e-placeholder">

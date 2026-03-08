@@ -1,4 +1,4 @@
-import styled from "styled-components";
+import styled, { keyframes } from "styled-components";
 import Habit from "./Habit";
 import StreakView from "./StreakView";
 import { HabitType, DashboardView } from "../../types/habit";
@@ -33,6 +33,25 @@ function getRandomCubeLogo(positive: boolean): string {
 function todayISO(): string {
     return new Date().toISOString().split('T')[0];
 }
+
+// ── Animations ─────────────────────────────────────────────────────────────────
+
+const overlayIn = keyframes`from { opacity: 0; } to { opacity: 1; }`;
+const overlayOut = keyframes`from { opacity: 1; } to { opacity: 0; }`;
+const modalIn = keyframes`
+    from { opacity: 0; transform: scale(0.93) translateY(8px); }
+    to   { opacity: 1; transform: scale(1)    translateY(0);   }
+`;
+const modalOut = keyframes`
+    from { opacity: 1; transform: scale(1)    translateY(0);   }
+    to   { opacity: 0; transform: scale(0.93) translateY(8px); }
+`;
+const contentFadeIn = keyframes`
+    from { opacity: 0; transform: translateY(5px); }
+    to   { opacity: 1; transform: translateY(0);   }
+`;
+
+// ── Styled components ──────────────────────────────────────────────────────────
 
 const Page = styled.div`
     max-width: 900px;
@@ -120,10 +139,28 @@ const EmptyState = styled.div`
     border-radius: 12px;
 `;
 
-const LoadingState = styled.div`
+const LoadingDots = styled.div`
     text-align: center;
     padding: 4rem 1rem;
-    color: #888;
+    color: #555;
+    font-size: 0.9rem;
+
+    &::after {
+        content: '';
+        display: inline-block;
+        animation: dots 1.2s steps(3, end) infinite;
+    }
+
+    @keyframes dots {
+        0%   { content: ''; }
+        33%  { content: '.'; }
+        66%  { content: '..'; }
+        100% { content: '...'; }
+    }
+`;
+
+const ContentArea = styled.div`
+    animation: ${contentFadeIn} 0.22s ease-out;
 `;
 
 const SectionLabel = styled.h2`
@@ -135,16 +172,86 @@ const SectionLabel = styled.h2`
     margin: 1.5rem 0 0.5rem;
 `;
 
+// ── Confirm modal ──────────────────────────────────────────────────────────────
+
+const ConfirmOverlay = styled.div<{ $closing: boolean }>`
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 250;
+    padding: 1rem;
+    animation: ${p => p.$closing ? overlayOut : overlayIn} 0.18s ease forwards;
+`;
+
+const ConfirmBox = styled.div<{ $closing: boolean }>`
+    background: #1e1e1e;
+    border: 1px solid #333;
+    border-radius: 16px;
+    padding: 1.5rem 1.75rem;
+    max-width: 360px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    animation: ${p => p.$closing ? modalOut : modalIn} 0.2s cubic-bezier(0.34, 1.2, 0.64, 1) forwards;
+`;
+
+const ConfirmTitle = styled.p`
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: white;
+`;
+
+const ConfirmDetail = styled.p`
+    margin: 0;
+    font-size: 0.875rem;
+    color: #888;
+    line-height: 1.5;
+`;
+
+const ConfirmActions = styled.div`
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+`;
+
+const ConfirmBtn = styled.button<{ $primary?: boolean; $danger?: boolean }>`
+    border: none;
+    border-radius: 8px;
+    padding: 0.5rem 1.1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    background: ${p => p.$danger ? '#7a1c1c' : p.$primary ? '#2dca8e' : '#2a2a2a'};
+    color: ${p => p.$primary ? '#111' : 'white'};
+    &:hover { opacity: 0.85; }
+`;
+
+// ── Types ──────────────────────────────────────────────────────────────────────
+
+type ConfirmState = {
+    title: string;
+    detail?: string;
+    confirmLabel: string;
+    danger?: boolean;
+    onConfirm: () => void;
+} | null;
+
 type HabitSectionProps = {
     label: string;
     habits: HabitType[];
     getLogo: (h: HabitType) => string;
     onToggleComplete: (h: HabitType) => void;
-    onDelete: (id: number) => void;
     onEdit: (h: HabitType) => void;
 };
 
-function HabitSection({ label, habits, getLogo, onToggleComplete, onDelete, onEdit }: HabitSectionProps) {
+function HabitSection({ label, habits, getLogo, onToggleComplete, onEdit }: HabitSectionProps) {
     if (habits.length === 0) return null;
     return (
         <>
@@ -156,7 +263,6 @@ function HabitSection({ label, habits, getLogo, onToggleComplete, onDelete, onEd
                         habitData={habit}
                         imgSrc={getLogo(habit)}
                         onToggleComplete={onToggleComplete}
-                        onDelete={onDelete}
                         onEdit={onEdit}
                     />
                 ))}
@@ -165,6 +271,8 @@ function HabitSection({ label, habits, getLogo, onToggleComplete, onDelete, onEd
     );
 }
 
+// ── Dashboard ──────────────────────────────────────────────────────────────────
+
 export default function Dashboard() {
     const [habits, setHabits] = useState<HabitType[]>([]);
     const [loading, setLoading] = useState(true);
@@ -172,6 +280,10 @@ export default function Dashboard() {
     const [habitToEdit, setHabitToEdit] = useState<HabitType | null>(null);
     const [view, setView] = useState<DashboardView>('daily');
     const [calendarDate, setCalendarDate] = useState<string>(todayISO());
+    const [contentKey, setContentKey] = useState(0);
+
+    const [confirmState, setConfirmState] = useState<ConfirmState>(null);
+    const [confirmClosing, setConfirmClosing] = useState(false);
 
     const navigate = useNavigate();
     const dispatch = useDispatch();
@@ -198,7 +310,10 @@ export default function Dashboard() {
                 }
                 const date = view === 'calendar' ? calendarDate : undefined;
                 const data = await api.habits.list(view === 'streak' ? 'all' : view, date);
-                if (!cancelled) setHabits(data);
+                if (!cancelled) {
+                    setHabits(data);
+                    setContentKey(k => k + 1);
+                }
             } catch {
                 if (!cancelled) navigate("/login");
             } finally {
@@ -211,12 +326,17 @@ export default function Dashboard() {
 
     const effectiveDate = view === 'calendar' ? calendarDate : undefined;
 
-    const handleToggleComplete = async (habit: HabitType) => {
-        const next = !habit.complete;
-        if (habit.complete) {
-            const confirmed = window.confirm(`Revert "${habit.name}" as incomplete?`);
-            if (!confirmed) return;
-        }
+    const dismissConfirm = () => {
+        setConfirmClosing(true);
+        setTimeout(() => { setConfirmState(null); setConfirmClosing(false); }, 180);
+    };
+
+    const showConfirm = (state: ConfirmState) => {
+        setConfirmClosing(false);
+        setConfirmState(state);
+    };
+
+    const doToggle = async (habit: HabitType, next: boolean) => {
         setHabits(prev => prev.map(h => h.id === habit.id ? { ...h, complete: next } : h));
         try {
             if (next) {
@@ -224,7 +344,6 @@ export default function Dashboard() {
             } else {
                 await api.habits.logUncomplete(habit.id, effectiveDate);
             }
-            // Refresh to get updated streak/hasFreeze
             const date = view === 'calendar' ? calendarDate : undefined;
             const data = await api.habits.list(view === 'streak' ? 'all' : view, date);
             setHabits(data);
@@ -235,12 +354,41 @@ export default function Dashboard() {
         }
     };
 
+    const handleToggleComplete = (habit: HabitType) => {
+        const next = !habit.complete;
+
+        // Revert → show confirm modal
+        if (habit.complete) {
+            showConfirm({
+                title: `Revert "${habit.name}"?`,
+                detail: 'This will mark it as incomplete for this date.',
+                confirmLabel: 'Revert',
+                onConfirm: () => { dismissConfirm(); doToggle(habit, false); },
+            });
+            return;
+        }
+
+        // Future date → show confirm modal
+        if (view === 'calendar' && calendarDate > todayISO()) {
+            showConfirm({
+                title: `Log "${habit.name}" for a future date?`,
+                detail: `You're marking this complete for ${calendarDate}.`,
+                confirmLabel: 'Log Anyway',
+                onConfirm: () => { dismissConfirm(); doToggle(habit, true); },
+            });
+            return;
+        }
+
+        doToggle(habit, next);
+    };
+
     const handleDelete = async (id: number) => {
         const habit = habits.find(h => h.id === id);
+        closeModal();
         setHabits(prev => prev.filter(h => h.id !== id));
         try {
             await api.habits.remove(id);
-            toast.success(`Removed "${habit?.name}"`);
+            toast.success(`"${habit?.name}" ended`);
         } catch (err: unknown) {
             if (habit) setHabits(prev => [...prev, habit].sort((a, b) => a.id - b.id));
             toast.error(err instanceof Error ? err.message : "Delete failed");
@@ -323,33 +471,35 @@ export default function Dashboard() {
                 )}
 
                 {loading ? (
-                    <LoadingState>Loading your habits…</LoadingState>
-                ) : view === 'streak' ? (
-                    <StreakView habits={habits} />
-                ) : habits.length === 0 ? (
-                    <EmptyState>
-                        <p style={{ fontSize: "1.1rem", marginBottom: "0.5rem" }}>No habits here.</p>
-                        <p style={{ fontSize: "0.9rem" }}>Click <strong>+ New Habit</strong> to add one.</p>
-                    </EmptyState>
+                    <LoadingDots>Loading your habits</LoadingDots>
                 ) : (
-                    <>
-                        <HabitSection
-                            label={`To Do — ${incomplete.length}`}
-                            habits={incomplete}
-                            getLogo={getLogo}
-                            onToggleComplete={handleToggleComplete}
-                            onDelete={handleDelete}
-                            onEdit={openEdit}
-                        />
-                        <HabitSection
-                            label={`Completed — ${complete.length}`}
-                            habits={complete}
-                            getLogo={getLogo}
-                            onToggleComplete={handleToggleComplete}
-                            onDelete={handleDelete}
-                            onEdit={openEdit}
-                        />
-                    </>
+                    <ContentArea key={contentKey}>
+                        {view === 'streak' ? (
+                            <StreakView habits={habits} />
+                        ) : habits.length === 0 ? (
+                            <EmptyState>
+                                <p style={{ fontSize: "1.1rem", marginBottom: "0.5rem" }}>No habits here.</p>
+                                <p style={{ fontSize: "0.9rem" }}>Click <strong>+ New Habit</strong> to add one.</p>
+                            </EmptyState>
+                        ) : (
+                            <>
+                                <HabitSection
+                                    label={`To Do — ${incomplete.length}`}
+                                    habits={incomplete}
+                                    getLogo={getLogo}
+                                    onToggleComplete={handleToggleComplete}
+                                    onEdit={openEdit}
+                                />
+                                <HabitSection
+                                    label={`Completed — ${complete.length}`}
+                                    habits={complete}
+                                    getLogo={getLogo}
+                                    onToggleComplete={handleToggleComplete}
+                                    onEdit={openEdit}
+                                />
+                            </>
+                        )}
+                    </ContentArea>
                 )}
             </Page>
 
@@ -358,8 +508,28 @@ export default function Dashboard() {
                 onClose={closeModal}
                 onCreate={handleCreate}
                 onUpdate={handleUpdate}
+                onDelete={handleDelete}
                 habitToEdit={habitToEdit}
             />
+
+            {confirmState && (
+                <ConfirmOverlay $closing={confirmClosing} onClick={dismissConfirm}>
+                    <ConfirmBox $closing={confirmClosing} onClick={e => e.stopPropagation()}>
+                        <ConfirmTitle>{confirmState.title}</ConfirmTitle>
+                        {confirmState.detail && <ConfirmDetail>{confirmState.detail}</ConfirmDetail>}
+                        <ConfirmActions>
+                            <ConfirmBtn onClick={dismissConfirm}>Cancel</ConfirmBtn>
+                            <ConfirmBtn
+                                $danger={confirmState.danger}
+                                $primary={!confirmState.danger}
+                                onClick={confirmState.onConfirm}
+                            >
+                                {confirmState.confirmLabel}
+                            </ConfirmBtn>
+                        </ConfirmActions>
+                    </ConfirmBox>
+                </ConfirmOverlay>
+            )}
         </>
     );
 }

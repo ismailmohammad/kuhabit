@@ -25,7 +25,6 @@ interface HabitProps {
     habitData: HabitType;
     imgSrc: string;
     onToggleComplete: (habit: HabitType) => void;
-    onDelete: (id: number) => void;
     onEdit: (habit: HabitType) => void;
 }
 
@@ -33,7 +32,7 @@ const DAY_FULL: Record<string, string> = {
     Su: 'Sun', Mo: 'Mon', Tu: 'Tue', We: 'Wed', Th: 'Thu', Fr: 'Fri', Sa: 'Sat',
 };
 
-function Habit({ habitData, imgSrc, onToggleComplete, onDelete, onEdit }: HabitProps) {
+function Habit({ habitData, imgSrc, onToggleComplete, onEdit }: HabitProps) {
     const [glowActive, setGlowActive] = useState(false);
     const [surge, setSurge] = useState(false);
     const [showEmbers, setShowEmbers] = useState(false);
@@ -63,7 +62,8 @@ function Habit({ habitData, imgSrc, onToggleComplete, onDelete, onEdit }: HabitP
     }, [showEmbers]);
 
     const handleClick = () => {
-        if (isStreaking && !habitData.complete) {
+        // Fire animation when completing any habit that has a streak (creating or extending one)
+        if (!habitData.complete && habitData.streak >= 1) {
             setSurge(true);
             setShowEmbers(true);
             setGlowActive(true);
@@ -138,7 +138,6 @@ function Habit({ habitData, imgSrc, onToggleComplete, onDelete, onEdit }: HabitP
 
                 <div className="habit-actions">
                     <button className="btn-edit" onClick={() => onEdit(habitData)}>Edit</button>
-                    <button className="btn-remove" onClick={() => onDelete(habitData.id)}>Remove</button>
                 </div>
             </div>
         </>

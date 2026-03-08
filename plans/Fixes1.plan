@@ -1,0 +1,16 @@
+Bugs/Changes Required:
+- Add animation to modals to ease open/close
+- the selector for curb/build on edit/create modal should default to build
+- Switching tabs Daily, All, Calendar, Streaks. Feels too instant. Transition between tabs, and show loading animation while fetching data
+- if a user is trying to mark a future habit as complete, prompt them to confirm with a modal. keep in line with ui and smooth transition not janky
+- replace reset/revert completion dialog with modal.
+- once a habit has an active streak, show the fire cube in whichever tab it shows up (keep it consistent)
+- if a streak is being created (ie. the second consecutive completion), IMPORTANT: addLog/embers/screen glow must be there as it happens in Landing when the flame cube is clicked.
+ If the issue currently is that it's making network calls and refreshing, show animations first then proceed.
+- give every user 3 streak freezes to start off with 
+- move remove button for habits within the edit modal. Once again they have to confirm that they understand that it will remove all habits in the series
+whether completed or not. Alternatively provide a button named End Habit with a tooltip/info saying that it's to indicate a habit has reached completion whether
+that's a new habit completed, or a bad habit curbed.
+- the scrollbars on the modals are unsightly, please make it look better
+- selecting a reminder time is very user/ux unfriendly. make it a time picker
+- when logged in, don't display dashboard button on header unless the user is not on the dashboard page

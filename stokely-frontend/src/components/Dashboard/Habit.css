@@ -127,8 +127,7 @@
     flex-shrink: 0;
 }
 
-.btn-edit,
-.btn-remove {
+.btn-edit {
     border: none;
     border-radius: 7px;
     padding: 0.35rem 0.8rem;
@@ -136,20 +135,11 @@
     font-weight: 600;
     cursor: pointer;
     transition: opacity 0.15s;
-}
-
-.btn-edit {
     background: #1c5a7a;
     color: white;
 }
 
-.btn-remove {
-    background: #7a1c1c;
-    color: white;
-}
-
-.btn-edit:hover,
-.btn-remove:hover {
+.btn-edit:hover {
     opacity: 0.85;
     border-color: transparent;
 }

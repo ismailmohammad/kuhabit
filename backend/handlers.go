@@ -168,6 +168,9 @@ func handleRegister(c *gin.Context) {
 		return
 	}
 
+	// Give every new user 3 streak freezes to start
+	db.Create(&StreakFreeze{UserID: user.ID, Count: 3})
+
 	session := sessions.Default(c)
 	session.Set("userID", fmt.Sprintf("%d", user.ID))
 	session.Save()

@@ -1,6 +1,6 @@
 import styled from "styled-components";
 import LogoImage from '../assets/header-logo.png';
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { clearUserInfo } from "../redux/userSlice";
 import { api } from "../api/api";
@@ -137,6 +137,7 @@ const DropdownItem = styled.button`
 const Header = () => {
     const dispatch = useDispatch();
     const navigate = useNavigate();
+    const location = useLocation();
     const userInfo = useSelector((state: RootState) => state.user.userInfo);
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
@@ -177,7 +178,9 @@ const Header = () => {
                 <NavActions>
                     {userInfo ? (
                         <>
-                            <Link to="/dashboard"><NavBtn>Dashboard</NavBtn></Link>
+                            {location.pathname !== '/dashboard' && (
+                                <Link to="/dashboard"><NavBtn>Dashboard</NavBtn></Link>
+                            )}
                             <DropdownWrap ref={dropdownRef}>
                                 <NavBtn onClick={() => setDropdownOpen(p => !p)}>
                                     @{userInfo.username} ▾
