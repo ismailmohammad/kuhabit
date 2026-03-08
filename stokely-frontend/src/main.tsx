@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import Home from './Home.tsx'
+import Layout from './Layout.tsx'
+import Landing from './components/LandingPage/Landing.tsx'
 import ErrorPage from './ErrorPage.tsx'
 import Dashboard from './components/Dashboard/Dashboard.tsx'
 import RegisterPage from './components/UserActionPages/RegisterPage.tsx'
@@ -12,10 +13,17 @@ import LoginPage from './components/UserActionPages/LoginPage.tsx'
 import { Toaster } from 'react-hot-toast'
 
 const router = createBrowserRouter([
-  { path: "/", element: <Home />, errorElement: <ErrorPage /> },
-  { path: "/dashboard", element: <Dashboard />, errorElement: <ErrorPage /> },
-  { path: "/login", element: <LoginPage />, errorElement: <ErrorPage /> },
-  { path: "/register", element: <RegisterPage />, errorElement: <ErrorPage /> },
+  {
+    path: "/",
+    element: <Layout />,
+    errorElement: <ErrorPage />,
+    children: [
+      { index: true, element: <Landing /> },
+      { path: "dashboard", element: <Dashboard /> },
+      { path: "login", element: <LoginPage /> },
+      { path: "register", element: <RegisterPage /> },
+    ],
+  },
 ]);
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

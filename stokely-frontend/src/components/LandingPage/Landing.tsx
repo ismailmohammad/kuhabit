@@ -634,6 +634,7 @@ const Page = styled.div`
     display: flex;
     flex-direction: column;
     gap: 3rem;
+    animation: page-fade-in 0.22s ease-out;
 `;
 
 const Hero = styled.section`

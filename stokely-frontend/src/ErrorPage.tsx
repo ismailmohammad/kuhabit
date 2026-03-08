@@ -8,7 +8,7 @@ const ErrorDiv = styled.div`
     flex-direction: column;
     align-items: center;
     height: 100vh;
-    color: black;
+    color: #eee;
 `;
 
 export default function ErrorPage() {

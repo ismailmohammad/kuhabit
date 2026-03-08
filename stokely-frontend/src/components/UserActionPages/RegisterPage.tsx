@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import Header from "../Header";
 import "./LoginPage.css";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -37,68 +36,65 @@ const RegisterPage = () => {
     };
 
     return (
-        <>
-            <Header />
-            <div className="auth-page">
-                <div className="auth-card">
-                    <h1 className="auth-title">Create account</h1>
-                    <form onSubmit={handleRegister} className="auth-form">
-                        <label>Username</label>
-                        <input
-                            type="text"
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value)}
-                            placeholder="Choose a username"
-                            required
-                            minLength={3}
-                            maxLength={50}
-                            autoComplete="username"
-                        />
-                        <label>
-                            Email <span className="optional-label">(optional)</span>
-                        </label>
-                        <input
-                            type="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            placeholder="you@example.com"
-                            autoComplete="email"
-                        />
-                        {!email && (
-                            <p className="auth-warning">
-                                ⚠ Without an email address, recovering your account if you forget your password won't be possible.
-                            </p>
-                        )}
-                        <label>Password</label>
-                        <input
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            placeholder="Min. 8 characters"
-                            required
-                            minLength={8}
-                            autoComplete="new-password"
-                        />
-                        <label>Confirm Password</label>
-                        <input
-                            type="password"
-                            value={confirmPassword}
-                            onChange={(e) => setConfirmPassword(e.target.value)}
-                            placeholder="Repeat your password"
-                            required
-                            minLength={8}
-                            autoComplete="new-password"
-                        />
-                        <button className="auth-submit" type="submit" disabled={loading}>
-                            {loading ? "Creating account…" : "Create account"}
-                        </button>
-                    </form>
-                    <p className="auth-switch">
-                        Already have an account? <Link to="/login">Log in</Link>
-                    </p>
-                </div>
+        <div className="auth-page">
+            <div className="auth-card">
+                <h1 className="auth-title">Create account</h1>
+                <form onSubmit={handleRegister} className="auth-form">
+                    <label>Username</label>
+                    <input
+                        type="text"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder="Choose a username"
+                        required
+                        minLength={3}
+                        maxLength={50}
+                        autoComplete="username"
+                    />
+                    <label>
+                        Email <span className="optional-label">(optional)</span>
+                    </label>
+                    <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        autoComplete="email"
+                    />
+                    {!email && (
+                        <p className="auth-warning">
+                            ⚠ Without an email address, recovering your account if you forget your password won't be possible.
+                        </p>
+                    )}
+                    <label>Password</label>
+                    <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Min. 8 characters"
+                        required
+                        minLength={8}
+                        autoComplete="new-password"
+                    />
+                    <label>Confirm Password</label>
+                    <input
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Repeat your password"
+                        required
+                        minLength={8}
+                        autoComplete="new-password"
+                    />
+                    <button className="auth-submit" type="submit" disabled={loading}>
+                        {loading ? "Creating account…" : "Create account"}
+                    </button>
+                </form>
+                <p className="auth-switch">
+                    Already have an account? <Link to="/login">Log in</Link>
+                </p>
             </div>
-        </>
+        </div>
     );
 };
 

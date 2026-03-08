@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import Header from "../Header";
 import "./LoginPage.css";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -31,41 +30,38 @@ const LoginPage = () => {
     };
 
     return (
-        <>
-            <Header />
-            <div className="auth-page">
-                <div className="auth-card">
-                    <h1 className="auth-title">Log in</h1>
-                    <form onSubmit={handleLogin} className="auth-form">
-                        <label>Username</label>
-                        <input
-                            type="text"
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value)}
-                            placeholder="Username"
-                            required
-                            autoComplete="username"
-                        />
-                        <label>Password</label>
-                        <input
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            placeholder="••••••••"
-                            required
-                            minLength={8}
-                            autoComplete="current-password"
-                        />
-                        <button className="auth-submit" type="submit" disabled={loading}>
-                            {loading ? "Logging in…" : "Log in"}
-                        </button>
-                    </form>
-                    <p className="auth-switch">
-                        Don't have an account? <Link to="/register">Get started</Link>
-                    </p>
-                </div>
+        <div className="auth-page">
+            <div className="auth-card">
+                <h1 className="auth-title">Log in</h1>
+                <form onSubmit={handleLogin} className="auth-form">
+                    <label>Username</label>
+                    <input
+                        type="text"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder="Username"
+                        required
+                        autoComplete="username"
+                    />
+                    <label>Password</label>
+                    <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        required
+                        minLength={8}
+                        autoComplete="current-password"
+                    />
+                    <button className="auth-submit" type="submit" disabled={loading}>
+                        {loading ? "Logging in…" : "Log in"}
+                    </button>
+                </form>
+                <p className="auth-switch">
+                    Don't have an account? <Link to="/register">Get started</Link>
+                </p>
             </div>
-        </>
+        </div>
     );
 };
 

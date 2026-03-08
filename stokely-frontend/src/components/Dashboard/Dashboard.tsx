@@ -1,5 +1,4 @@
 import styled from "styled-components";
-import Header from "../Header";
 import Habit from "./Habit";
 import { HabitType } from "../../types/habit";
 import { useState, useEffect } from "react";
@@ -32,6 +31,7 @@ const Page = styled.div`
     max-width: 900px;
     margin: 0 auto;
     padding: 1.5rem 1rem;
+    animation: page-fade-in 0.22s ease-out;
 `;
 
 const PageHeader = styled.div`
@@ -94,6 +94,36 @@ const SectionLabel = styled.h2`
     margin: 1.5rem 0 0.5rem;
 `;
 
+type HabitSectionProps = {
+    label: string;
+    habits: HabitType[];
+    getLogo: (h: HabitType) => string;
+    onToggleComplete: (h: HabitType) => void;
+    onDelete: (id: number) => void;
+    onEdit: (h: HabitType) => void;
+};
+
+function HabitSection({ label, habits, getLogo, onToggleComplete, onDelete, onEdit }: HabitSectionProps) {
+    if (habits.length === 0) return null;
+    return (
+        <>
+            <SectionLabel>{label}</SectionLabel>
+            <HabitsContainer>
+                {habits.map(habit => (
+                    <Habit
+                        key={habit.id}
+                        habitData={habit}
+                        imgSrc={getLogo(habit)}
+                        onToggleComplete={onToggleComplete}
+                        onDelete={onDelete}
+                        onEdit={onEdit}
+                    />
+                ))}
+            </HabitsContainer>
+        </>
+    );
+}
+
 export default function Dashboard() {
     const [habits, setHabits] = useState<HabitType[]>([]);
     const [loading, setLoading] = useState(true);
@@ -127,9 +157,7 @@ export default function Dashboard() {
                 const data = await api.habits.list();
                 if (!cancelled) setHabits(data);
             } catch {
-                if (!cancelled) {
-                    navigate("/login");
-                }
+                if (!cancelled) navigate("/login");
             } finally {
                 if (!cancelled) setLoading(false);
             }
@@ -195,13 +223,11 @@ export default function Dashboard() {
     };
 
     const date = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-
     const incomplete = habits.filter(h => !h.complete);
     const complete = habits.filter(h => h.complete);
 
     return (
         <>
-            <Header />
             <Page>
                 <PageHeader>
                     <PageTitle>
@@ -224,40 +250,22 @@ export default function Dashboard() {
                     </EmptyState>
                 ) : (
                     <>
-                        {incomplete.length > 0 && (
-                            <>
-                                <SectionLabel>To Do — {incomplete.length}</SectionLabel>
-                                <HabitsContainer>
-                                    {incomplete.map(habit => (
-                                        <Habit
-                                            key={habit.id}
-                                            habitData={habit}
-                                            imgSrc={getLogo(habit)}
-                                            onToggleComplete={handleToggleComplete}
-                                            onDelete={handleDelete}
-                                            onEdit={openEdit}
-                                        />
-                                    ))}
-                                </HabitsContainer>
-                            </>
-                        )}
-                        {complete.length > 0 && (
-                            <>
-                                <SectionLabel>Completed — {complete.length}</SectionLabel>
-                                <HabitsContainer>
-                                    {complete.map(habit => (
-                                        <Habit
-                                            key={habit.id}
-                                            habitData={habit}
-                                            imgSrc={getLogo(habit)}
-                                            onToggleComplete={handleToggleComplete}
-                                            onDelete={handleDelete}
-                                            onEdit={openEdit}
-                                        />
-                                    ))}
-                                </HabitsContainer>
-                            </>
-                        )}
+                        <HabitSection
+                            label={`To Do — ${incomplete.length}`}
+                            habits={incomplete}
+                            getLogo={getLogo}
+                            onToggleComplete={handleToggleComplete}
+                            onDelete={handleDelete}
+                            onEdit={openEdit}
+                        />
+                        <HabitSection
+                            label={`Completed — ${complete.length}`}
+                            habits={complete}
+                            getLogo={getLogo}
+                            onToggleComplete={handleToggleComplete}
+                            onDelete={handleDelete}
+                            onEdit={openEdit}
+                        />
                     </>
                 )}
             </Page>

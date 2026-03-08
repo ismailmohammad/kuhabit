@@ -55,3 +55,8 @@ button {
     50%  { transform: rotate(5deg); }
     100% { transform: rotate(-5deg); }
 }
+
+@keyframes page-fade-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
