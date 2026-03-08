@@ -1,4 +1,4 @@
-import type { HabitType, UserInfo, DashboardView, StreakDetail } from '../types/habit';
+import type { HabitType, UserInfo, DashboardView, StreakDetail, AchievementType } from '../types/habit';
 
 const BASE = '/api';
 
@@ -44,6 +44,8 @@ export const api = {
             req<void>(`/habits/${id}/log`, { method: 'DELETE', body: JSON.stringify({ date: date ?? '' }) }),
         getStreak: (id: number) =>
             req<StreakDetail>(`/habits/${id}/streak`),
+        getAchievements: () =>
+            req<AchievementType[]>('/habits/achievements'),
     },
     push: {
         getVapidKey: () => req<{ publicKey: string }>('/push/vapid-public'),

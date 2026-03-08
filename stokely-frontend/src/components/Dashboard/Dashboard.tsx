@@ -1,7 +1,8 @@
 import styled, { keyframes } from "styled-components";
 import Habit from "./Habit";
 import StreakView from "./StreakView";
-import { HabitType, DashboardView } from "../../types/habit";
+import AchievementsView from "./AchievementsView";
+import { HabitType, DashboardView, AchievementType } from "../../types/habit";
 import { useState, useEffect, useRef } from "react";
 import HabitModal from "./NewHabitModal";
 import toast from "react-hot-toast";
@@ -21,6 +22,12 @@ import CubeGreenRight from '../../assets/cube-logo-green-right.png';
 import CubeGreenLeft from '../../assets/cube-logo-green-left.png';
 import FieryGreen from '../../assets/fiery-cube-green.png';
 import FieryRed from '../../assets/fiery-cube-red.png';
+import BadgeFirstCompletion from '../../assets/kindling/badge_first_completion.png';
+import BadgeFirstStreak from '../../assets/kindling/badge_first_streak.png';
+import Badge7Day from '../../assets/kindling/badge_7_day_flame.png';
+import Badge21Day from '../../assets/kindling/badge_21_day_momentum.png';
+import Badge90Day from '../../assets/kindling/badge_90_day_forge.png';
+import Badge365Day from '../../assets/kindling/badge_365_day_legend.png';
 
 const negativeLogos = [CubeRedTop, CubeRedRight, CubeRedLeft];
 const positiveLogos = [CubeGreenLeft, CubeGreenRight, CubeGreenTop];
@@ -35,6 +42,24 @@ function todayISO(): string {
 }
 
 const ALL_TAB_PAGE_SIZE = 20;
+const ACHIEVEMENT_SEEN_KEY_PREFIX = 'stokely_seen_achievements_v1';
+const ACHIEVEMENT_ORDER: AchievementType[] = [
+    { key: 'first_completion', title: 'First Completion', description: 'Complete your first habit log.', unlocked: false },
+    { key: 'first_streak', title: 'First Streak', description: 'Reach your first 2-day streak.', unlocked: false },
+    { key: 'streak_7', title: '7 Day Flame', description: 'Reach a 7-day streak on any habit.', unlocked: false },
+    { key: 'streak_21', title: '21 Day Momentum', description: 'Reach a 21-day streak on any habit.', unlocked: false },
+    { key: 'streak_90', title: '90 Day Forge', description: 'Reach a 90-day streak on any habit.', unlocked: false },
+    { key: 'streak_365', title: '365 Day Legend', description: 'Reach a 365-day streak on any habit.', unlocked: false },
+];
+
+const ACHIEVEMENT_BADGES: Record<string, string> = {
+    first_completion: BadgeFirstCompletion,
+    first_streak: BadgeFirstStreak,
+    streak_7: Badge7Day,
+    streak_21: Badge21Day,
+    streak_90: Badge90Day,
+    streak_365: Badge365Day,
+};
 
 // ── Animations ─────────────────────────────────────────────────────────────────
 
@@ -51,6 +76,21 @@ const modalOut = keyframes`
 const contentFadeIn = keyframes`
     from { opacity: 0; transform: translateY(5px); }
     to   { opacity: 1; transform: translateY(0);   }
+`;
+const tabPulse = keyframes`
+    0% { box-shadow: 0 0 0 rgba(45, 202, 142, 0); }
+    18% { box-shadow: 0 0 16px rgba(45, 202, 142, 0.65); }
+    36% { box-shadow: 0 0 0 rgba(45, 202, 142, 0); }
+    55% { box-shadow: 0 0 0 rgba(45, 202, 142, 0); }
+    73% { box-shadow: 0 0 16px rgba(45, 202, 142, 0.65); }
+    91% { box-shadow: 0 0 0 rgba(45, 202, 142, 0); }
+    100% { box-shadow: 0 0 0 rgba(45, 202, 142, 0); }
+`;
+const unlockBadgeFade = keyframes`
+    0% { opacity: 0; transform: translateX(-50%) translateY(-10px) scale(0.96); }
+    12% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+    82% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+    100% { opacity: 0; transform: translateX(-50%) translateY(-8px) scale(0.98); }
 `;
 
 // ── Styled components ──────────────────────────────────────────────────────────
@@ -100,7 +140,7 @@ const ViewTabBar = styled.div`
     padding-bottom: 0;
 `;
 
-const ViewTab = styled.button<{ $active: boolean }>`
+const ViewTab = styled.button<{ $active: boolean; $highlight?: boolean }>`
     background: none;
     border: none;
     color: ${p => p.$active ? '#2dca8e' : '#666'};
@@ -112,6 +152,7 @@ const ViewTab = styled.button<{ $active: boolean }>`
     margin-bottom: -1px;
     transition: color 0.15s, border-color 0.15s;
     &:hover { color: ${p => p.$active ? '#2dca8e' : '#aaa'}; }
+    animation: ${p => p.$highlight ? tabPulse : 'none'} 2.4s ease;
 `;
 
 const CalendarInput = styled.input`
@@ -258,6 +299,36 @@ const SectionLabel = styled.h2`
     margin: 1.5rem 0 0.5rem;
 `;
 
+const UnlockToast = styled.div`
+    position: fixed;
+    top: 5.2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 320;
+    background: rgba(18, 18, 18, 0.92);
+    border: 1px solid #3a3a3a;
+    border-radius: 14px;
+    padding: 0.65rem 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    animation: ${unlockBadgeFade} 2.4s ease forwards;
+    pointer-events: none;
+`;
+
+const UnlockToastImg = styled.img`
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+`;
+
+const UnlockToastText = styled.p`
+    margin: 0;
+    color: #fff;
+    font-size: 0.82rem;
+    font-weight: 700;
+`;
+
 // ── Confirm modal ──────────────────────────────────────────────────────────────
 
 const ConfirmOverlay = styled.div<{ $closing: boolean }>`
@@ -368,6 +439,9 @@ export default function Dashboard() {
     const [calendarDate, setCalendarDate] = useState<string>(todayISO());
     const [contentKey, setContentKey] = useState(0);
     const [searchQuery, setSearchQuery] = useState('');
+    const [achievements, setAchievements] = useState<AchievementType[]>(ACHIEVEMENT_ORDER);
+    const [achievementUnlockToast, setAchievementUnlockToast] = useState<AchievementType | null>(null);
+    const [highlightAchievementsTab, setHighlightAchievementsTab] = useState(false);
     const [allVisibleCount, setAllVisibleCount] = useState(ALL_TAB_PAGE_SIZE);
     const allLoadMoreRef = useRef<HTMLDivElement | null>(null);
 
@@ -377,6 +451,9 @@ export default function Dashboard() {
     const navigate = useNavigate();
     const dispatch = useDispatch();
     const userInfo = useSelector((state: RootState) => state.user.userInfo);
+    const achievementSeenKey = userInfo?.id
+        ? `${ACHIEVEMENT_SEEN_KEY_PREFIX}_${userInfo.id}`
+        : null;
 
     const [logoMap] = useState<Map<number, string>>(new Map());
 
@@ -399,9 +476,14 @@ export default function Dashboard() {
                     if (!cancelled) dispatch(setUserInfo(me));
                 }
                 const date = view === 'calendar' ? calendarDate : undefined;
-                const data = await api.habits.list(view === 'streak' ? 'all' : view, date);
+                const listView = view === 'streak' || view === 'achievements' ? 'all' : view;
+                const [data, achievementData] = await Promise.all([
+                    api.habits.list(listView, date),
+                    api.habits.getAchievements(),
+                ]);
                 if (!cancelled) {
                     setHabits(data);
+                    setAchievements(achievementData);
                     setContentKey(k => k + 1);
                 }
             } catch {
@@ -435,6 +517,37 @@ export default function Dashboard() {
         return () => window.removeEventListener('keydown', onKeyDown);
     }, [confirmState]);
 
+    useEffect(() => {
+        if (achievements.length === 0 || !achievementSeenKey) return;
+        let seen = new Set<string>();
+        try {
+            const seenRaw = localStorage.getItem(achievementSeenKey);
+            seen = new Set<string>(seenRaw ? JSON.parse(seenRaw) as string[] : []);
+        } catch {
+            seen = new Set<string>();
+        }
+        const newlyUnlocked = achievements.filter(a => a.unlocked && !seen.has(a.key));
+        if (newlyUnlocked.length === 0) return;
+
+        setAchievementUnlockToast(newlyUnlocked[0]);
+        setHighlightAchievementsTab(true);
+
+        const nextSeen = new Set(seen);
+        newlyUnlocked.forEach(a => nextSeen.add(a.key));
+        try {
+            localStorage.setItem(achievementSeenKey, JSON.stringify(Array.from(nextSeen)));
+        } catch {
+            // ignore storage failures
+        }
+
+        const hideToast = setTimeout(() => setAchievementUnlockToast(null), 2400);
+        const stopHighlight = setTimeout(() => setHighlightAchievementsTab(false), 4300);
+        return () => {
+            clearTimeout(hideToast);
+            clearTimeout(stopHighlight);
+        };
+    }, [achievements, achievementSeenKey]);
+
     const doToggle = async (habit: HabitType, next: boolean) => {
         setHabits(prev => prev.map(h => h.id === habit.id ? { ...h, complete: next } : h));
         try {
@@ -444,8 +557,13 @@ export default function Dashboard() {
                 await api.habits.logUncomplete(habit.id, effectiveDate);
             }
             const date = view === 'calendar' ? calendarDate : undefined;
-            const data = await api.habits.list(view === 'streak' ? 'all' : view, date);
+            const listView = view === 'streak' || view === 'achievements' ? 'all' : view;
+            const [data, achievementData] = await Promise.all([
+                api.habits.list(listView, date),
+                api.habits.getAchievements(),
+            ]);
             setHabits(data);
+            setAchievements(achievementData);
             toast.success(next ? `✓ "${habit.name}" complete` : `↩ "${habit.name}" reset`);
         } catch (err: unknown) {
             setHabits(prev => prev.map(h => h.id === habit.id ? habit : h));
@@ -578,6 +696,7 @@ export default function Dashboard() {
         { id: 'all', label: 'All' },
         { id: 'calendar', label: 'Calendar' },
         { id: 'streak', label: 'Streaks' },
+        { id: 'achievements', label: 'Achievements' },
     ];
 
     return (
@@ -600,6 +719,7 @@ export default function Dashboard() {
                         <ViewTab
                             key={v.id}
                             $active={view === v.id}
+                            $highlight={v.id === 'achievements' && highlightAchievementsTab}
                             onClick={() => {
                                 if (view === v.id) return;
                                 setLoading(true);
@@ -671,6 +791,11 @@ export default function Dashboard() {
                                     setSearchQuery(habitName);
                                 }}
                             />
+                        ) : view === 'achievements' ? (
+                            <AchievementsView
+                                achievements={achievements}
+                                getBadgeSrc={(key: string) => ACHIEVEMENT_BADGES[key] || BadgeFirstCompletion}
+                            />
                         ) : filteredHabits.length === 0 ? (
                             <EmptyState>
                                 <p style={{ fontSize: "1.1rem", marginBottom: "0.5rem" }}>
@@ -738,6 +863,18 @@ export default function Dashboard() {
                         </ConfirmActions>
                     </ConfirmBox>
                 </ConfirmOverlay>
+            )}
+
+            {achievementUnlockToast && (
+                <UnlockToast>
+                    <UnlockToastImg
+                        src={ACHIEVEMENT_BADGES[achievementUnlockToast.key] || BadgeFirstCompletion}
+                        alt={achievementUnlockToast.title}
+                    />
+                    <UnlockToastText>
+                        Achievement unlocked: {achievementUnlockToast.title}
+                    </UnlockToastText>
+                </UnlockToast>
             )}
         </>
     );

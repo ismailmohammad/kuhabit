@@ -132,6 +132,55 @@ func todayComplete(habitID, userID uint) bool {
 	return count > 0
 }
 
+func longestStreakEver(h Habit, logs []HabitLog) int {
+	if len(logs) == 0 {
+		return 0
+	}
+
+	loggedDates := map[string]bool{}
+	maxLogDate := logs[0].LogDate.UTC().Truncate(24 * time.Hour)
+	for _, l := range logs {
+		d := l.LogDate.UTC().Truncate(24 * time.Hour)
+		loggedDates[d.Format("2006-01-02")] = true
+		if d.After(maxLogDate) {
+			maxLogDate = d
+		}
+	}
+
+	start := h.CreatedAt.UTC().Truncate(24 * time.Hour)
+	end := maxLogDate
+	if h.RecurrenceEnd != nil {
+		recEnd := h.RecurrenceEnd.UTC().Truncate(24 * time.Hour)
+		if recEnd.Before(end) {
+			end = recEnd
+		}
+	}
+	if end.Before(start) {
+		return 0
+	}
+
+	longest := 0
+	running := 0
+	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
+		if !containsDay(h.Recurrence, dayCode(d)) {
+			continue
+		}
+		if h.RecurrenceEnd != nil && d.After(h.RecurrenceEnd.UTC().Truncate(24*time.Hour)) {
+			break
+		}
+
+		if loggedDates[d.Format("2006-01-02")] {
+			running++
+			if running > longest {
+				longest = running
+			}
+		} else {
+			running = 0
+		}
+	}
+	return longest
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 func handleRegister(c *gin.Context) {
@@ -525,6 +574,13 @@ type StreakDetail struct {
 	History       []DayStatus `json:"history"`
 }
 
+type Achievement struct {
+	Key         string `json:"key"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Unlocked    bool   `json:"unlocked"`
+}
+
 func getHabitStreak(c *gin.Context) {
 	user := c.MustGet("user").(User)
 	habitID, err := strconv.Atoi(c.Param("id"))
@@ -589,6 +645,74 @@ func getHabitStreak(c *gin.Context) {
 		FreezeCount:   freeze.Count,
 		History:       history,
 	})
+}
+
+func getAchievements(c *gin.Context) {
+	user := c.MustGet("user").(User)
+
+	var habits []Habit
+	db.Where("user_id = ?", user.ID).Find(&habits)
+
+	var logs []HabitLog
+	db.Where("user_id = ?", user.ID).Find(&logs)
+
+	hasRealCompletion := false
+	logsByHabit := map[uint][]HabitLog{}
+	for _, l := range logs {
+		if !l.WasFrozen {
+			hasRealCompletion = true
+		}
+		logsByHabit[l.HabitID] = append(logsByHabit[l.HabitID], l)
+	}
+
+	longestAnyHabit := 0
+	for _, h := range habits {
+		longest := longestStreakEver(h, logsByHabit[h.ID])
+		if longest > longestAnyHabit {
+			longestAnyHabit = longest
+		}
+	}
+
+	achievements := []Achievement{
+		{
+			Key:         "first_completion",
+			Title:       "First Completion",
+			Description: "Complete your first habit log.",
+			Unlocked:    hasRealCompletion,
+		},
+		{
+			Key:         "first_streak",
+			Title:       "First Streak",
+			Description: "Reach your first 2-day streak.",
+			Unlocked:    longestAnyHabit >= 2,
+		},
+		{
+			Key:         "streak_7",
+			Title:       "7 Day Flame",
+			Description: "Reach a 7-day streak on any habit.",
+			Unlocked:    longestAnyHabit >= 7,
+		},
+		{
+			Key:         "streak_21",
+			Title:       "21 Day Momentum",
+			Description: "Reach a 21-day streak on any habit.",
+			Unlocked:    longestAnyHabit >= 21,
+		},
+		{
+			Key:         "streak_90",
+			Title:       "90 Day Forge",
+			Description: "Reach a 90-day streak on any habit.",
+			Unlocked:    longestAnyHabit >= 90,
+		},
+		{
+			Key:         "streak_365",
+			Title:       "365 Day Legend",
+			Description: "Reach a 365-day streak on any habit.",
+			Unlocked:    longestAnyHabit >= 365,
+		},
+	}
+
+	c.JSON(http.StatusOK, achievements)
 }
 
 // ── User Settings ─────────────────────────────────────────────────────────────

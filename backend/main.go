@@ -107,6 +107,7 @@ func main() {
 		habits.Use(requireAuth)
 		{
 			habits.GET("", getHabits)
+			habits.GET("/achievements", getAchievements)
 			habits.POST("", createHabit)
 			habits.PUT("/:id", updateHabit)
 			habits.DELETE("/:id", deleteHabit)

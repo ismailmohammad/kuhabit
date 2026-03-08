@@ -19,7 +19,7 @@ export interface UserInfo {
     email?: string;
 }
 
-export type DashboardView = 'daily' | 'all' | 'calendar' | 'streak';
+export type DashboardView = 'daily' | 'all' | 'calendar' | 'streak' | 'achievements';
 
 export interface DayStatus {
     date: string;
@@ -33,4 +33,11 @@ export interface StreakDetail {
     longestStreak: number;
     freezeCount: number;
     history: DayStatus[];
+}
+
+export interface AchievementType {
+    key: string;
+    title: string;
+    description: string;
+    unlocked: boolean;
 }
