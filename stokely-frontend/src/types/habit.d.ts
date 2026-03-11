@@ -43,3 +43,17 @@ export interface AchievementType {
     description: string;
     unlocked: boolean;
 }
+
+export interface PushSubscriptionDevice {
+    id: number;
+    endpoint: string;
+    userAgent: string;
+    deviceLabel: string;
+    enabled: boolean;
+    createdAt: string;
+    lastSeenAt?: string;
+    lastSuccessAt?: string;
+    lastFailureAt?: string;
+    lastFailureCode: number;
+    failureCount: number;
+}

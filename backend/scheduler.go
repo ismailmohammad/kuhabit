@@ -1,12 +1,22 @@
 package main
 
 import (
+	"crypto/elliptic"
+	"encoding/base64"
 	"fmt"
+	"io"
 	"log"
+	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
+)
+
+var (
+	vapidConfigOnce sync.Once
+	vapidConfigErr  error
 )
 
 func startScheduler() {
@@ -51,17 +61,42 @@ func runReminderCheck(now time.Time) {
 		}
 
 		var subs []PushSubscription
-		db.Where("user_id = ?", h.UserID).Find(&subs)
+		db.Where("user_id = ? AND enabled = true", h.UserID).Find(&subs)
 		for _, sub := range subs {
-			if err := sendPush(sub, "Habit Reminder", fmt.Sprintf("Time to: %s", h.Name)); err != nil {
+			if _, err := sendPushAndRecord(sub, "Habit Reminder", fmt.Sprintf("Time to: %s", h.Name)); err != nil {
 				log.Printf("Push failed for sub %d: %v", sub.ID, err)
-				// Remove subscriptions that are no longer valid (410 Gone)
-				if isGoneError(err) {
-					db.Delete(&sub)
-				}
 			}
 		}
 	}
+}
+
+func sendPushAndRecord(sub PushSubscription, title, body string) (int, error) {
+	statusCode, err := sendPush(sub, title, body)
+	if err != nil {
+		now := time.Now().UTC()
+		db.Model(&PushSubscription{}).
+			Where("id = ?", sub.ID).
+			Updates(map[string]any{
+				"last_failure_at":   &now,
+				"last_failure_code": statusCode,
+				"failure_count":     sub.FailureCount + 1,
+			})
+		// Remove subscriptions that are no longer valid (410 Gone)
+		if isGoneError(err) {
+			db.Delete(&sub)
+		}
+		return statusCode, err
+	}
+
+	now := time.Now().UTC()
+	db.Model(&PushSubscription{}).
+		Where("id = ?", sub.ID).
+		Updates(map[string]any{
+			"last_success_at":   &now,
+			"last_failure_code": 0,
+			"failure_count":     0,
+		})
+	return statusCode, nil
 }
 
 // runNightlyFreezeLoop fires once per day just after UTC midnight to auto-consume
@@ -113,11 +148,32 @@ func runNightlyFreezeCheck(now time.Time) {
 	}
 }
 
-func sendPush(sub PushSubscription, title, body string) error {
-	vapidPublic := getEnv("VAPID_PUBLIC_KEY", "")
-	vapidPrivate := getEnv("VAPID_PRIVATE_KEY", "")
+func sendPush(sub PushSubscription, title, body string) (int, error) {
+	vapidPublic := strings.TrimSpace(getEnv("VAPID_PUBLIC_KEY", ""))
+	vapidPrivate := strings.TrimSpace(getEnv("VAPID_PRIVATE_KEY", ""))
 	if vapidPublic == "" || vapidPrivate == "" {
-		return nil // VAPID not configured, skip silently
+		return 0, fmt.Errorf("VAPID keys missing: both VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY are required")
+	}
+	vapidConfigOnce.Do(func() {
+		vapidConfigErr = validateVAPIDKeyPair(vapidPublic, vapidPrivate)
+	})
+	if vapidConfigErr != nil {
+		return 0, vapidConfigErr
+	}
+
+	subscriber := strings.TrimSpace(getEnv("VAPID_EMAIL", ""))
+	if subscriber == "" {
+		subscriber = strings.TrimSpace(getEnv("FRONTEND_ORIGIN", ""))
+	}
+	if subscriber == "" || !(strings.HasPrefix(subscriber, "mailto:") || strings.HasPrefix(subscriber, "https://")) {
+		return 0, fmt.Errorf("invalid VAPID subscriber; set VAPID_EMAIL to mailto:you@domain or https://your-domain")
+	}
+	// webpush-go adds "mailto:" itself for any subscriber that doesn't start with "https:".
+	// Strip our prefix so we don't end up with "mailto:mailto:you@domain" in the JWT sub claim.
+	subscriber = strings.TrimPrefix(subscriber, "mailto:")
+	endpointHost := ""
+	if u, err := url.Parse(sub.Endpoint); err == nil {
+		endpointHost = u.Host
 	}
 
 	s := &webpush.Subscription{
@@ -131,13 +187,73 @@ func sendPush(sub PushSubscription, title, body string) error {
 	resp, err := webpush.SendNotification([]byte(payload), s, &webpush.Options{
 		VAPIDPublicKey:  vapidPublic,
 		VAPIDPrivateKey: vapidPrivate,
-		Subscriber:      getEnv("VAPID_EMAIL", ""),
-		TTL:             60,
+		Subscriber:      subscriber,
+		TTL:             21600, // 6h improves delivery when device is briefly offline/asleep
+		Urgency:         webpush.UrgencyHigh,
 	})
+	statusCode := 0
+	var responseBody string
 	if resp != nil {
+		statusCode = resp.StatusCode
+		if resp.Body != nil {
+			if b, readErr := io.ReadAll(resp.Body); readErr == nil && len(b) > 0 {
+				responseBody = string(b)
+			}
+		}
 		resp.Body.Close()
 	}
-	return err
+	if err == nil && (statusCode < 200 || statusCode >= 300) {
+		err = fmt.Errorf("push service returned non-2xx status: %d (endpoint_host=%s, subscriber=%s)", statusCode, endpointHost, subscriber)
+		if responseBody != "" {
+			err = fmt.Errorf("push service returned non-2xx status: %d (endpoint_host=%s, subscriber=%s) body=%s", statusCode, endpointHost, subscriber, responseBody)
+		}
+	}
+	return statusCode, err
+}
+
+func validateVAPIDKeyPair(publicKey, privateKey string) error {
+	pubRaw, err := decodeBase64URLNoPad(publicKey)
+	if err != nil {
+		return fmt.Errorf("invalid VAPID_PUBLIC_KEY encoding: %w", err)
+	}
+	privRaw, err := decodeBase64URLNoPad(privateKey)
+	if err != nil {
+		return fmt.Errorf("invalid VAPID_PRIVATE_KEY encoding: %w", err)
+	}
+	if len(privRaw) != 32 {
+		return fmt.Errorf("invalid VAPID_PRIVATE_KEY length: got %d bytes, expected 32", len(privRaw))
+	}
+	curve := elliptic.P256()
+	x, y := curve.ScalarBaseMult(privRaw)
+	derivedPub := elliptic.Marshal(curve, x, y)
+	if len(pubRaw) != len(derivedPub) {
+		return fmt.Errorf("invalid VAPID_PUBLIC_KEY length: got %d bytes, expected %d", len(pubRaw), len(derivedPub))
+	}
+	if !equalBytes(pubRaw, derivedPub) {
+		return fmt.Errorf("VAPID key mismatch: VAPID_PUBLIC_KEY does not match VAPID_PRIVATE_KEY")
+	}
+	return nil
+}
+
+func decodeBase64URLNoPad(in string) ([]byte, error) {
+	s := strings.TrimSpace(in)
+	if s == "" {
+		return nil, fmt.Errorf("empty value")
+	}
+	s = strings.TrimRight(s, "=")
+	return base64.RawURLEncoding.DecodeString(s)
+}
+
+func equalBytes(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func isGoneError(err error) bool {

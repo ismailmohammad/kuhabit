@@ -54,11 +54,20 @@ type HabitLog struct {
 }
 
 type PushSubscription struct {
-	ID       uint   `gorm:"primaryKey" json:"-"`
-	UserID   string `gorm:"type:uuid;not null;index" json:"-"`
-	Endpoint string `gorm:"type:text;not null" json:"endpoint"`
-	P256DH   string `gorm:"type:text;not null" json:"p256dh"`
-	Auth     string `gorm:"type:text;not null" json:"auth"`
+	ID              uint       `gorm:"primaryKey" json:"id"`
+	CreatedAt       time.Time  `json:"createdAt"`
+	UserID          string     `gorm:"type:uuid;not null;uniqueIndex:idx_push_user_endpoint" json:"-"`
+	Endpoint        string     `gorm:"type:text;not null;uniqueIndex:idx_push_user_endpoint" json:"endpoint"`
+	P256DH          string     `gorm:"type:text;not null" json:"-"`
+	Auth            string     `gorm:"type:text;not null" json:"-"`
+	UserAgent       string     `gorm:"type:text;default:''" json:"userAgent"`
+	DeviceLabel     string     `gorm:"type:varchar(120);default:''" json:"deviceLabel"`
+	Enabled         bool       `gorm:"default:true" json:"enabled"`
+	LastSeenAt      *time.Time `json:"lastSeenAt,omitempty"`
+	LastSuccessAt   *time.Time `json:"lastSuccessAt,omitempty"`
+	LastFailureAt   *time.Time `json:"lastFailureAt,omitempty"`
+	LastFailureCode int        `gorm:"default:0" json:"lastFailureCode"`
+	FailureCount    int        `gorm:"default:0" json:"failureCount"`
 }
 
 type StreakFreeze struct {

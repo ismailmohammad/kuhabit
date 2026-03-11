@@ -3,8 +3,7 @@ import toast from "react-hot-toast";
 import './NewHabitModal.css';
 import { HabitType } from "../../types/habit";
 import { HABIT_ICONS } from "../../utils/habitIcons";
-import { api } from "../../api/api";
-import { registerServiceWorker, subscribeToPush } from "../../utils/pushNotifications";
+import { syncPushSubscriptionOnDevice } from "../../utils/pushNotifications";
 
 import CurbCube from '../../assets/cube-logo-red.png';
 import BuildCube from '../../assets/cube-logo-green.png';
@@ -68,53 +67,25 @@ function formatLocalTime(value: string): string {
     return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
 }
 
-// ── Time Picker ────────────────────────────────────────────────────────────────
-
-function TimePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-    const parsed = value ? value.split(':').map(Number) : null;
-    const h24 = parsed ? parsed[0] : 8;
-    const mins = parsed ? parsed[1] : 0;
-    const isPM = h24 >= 12;
-    const h12 = h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24;
-
-    const emit = (newH12: number, newMins: number, newIsPM: boolean) => {
-        let newH24 = newH12 % 12;
-        if (newIsPM) newH24 += 12;
-        onChange(`${String(newH24).padStart(2, '0')}:${String(newMins).padStart(2, '0')}`);
-    };
-
-    return (
-        <div className="time-picker">
-            <select
-                className="time-select"
-                value={h12}
-                onChange={e => emit(Number(e.target.value), mins, isPM)}
-            >
-                {[12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(h => (
-                    <option key={h} value={h}>{h}</option>
-                ))}
-            </select>
-            <span className="time-sep">:</span>
-            <select
-                className="time-select"
-                value={mins}
-                onChange={e => emit(h12, Number(e.target.value), isPM)}
-            >
-                {Array.from({ length: 12 }, (_, i) => i * 5).map(m => (
-                    <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
-                ))}
-            </select>
-            <select
-                className="time-select time-ampm"
-                value={isPM ? 'PM' : 'AM'}
-                onChange={e => emit(h12, mins, e.target.value === 'PM')}
-            >
-                <option value="AM">AM</option>
-                <option value="PM">PM</option>
-            </select>
-        </div>
-    );
+function getDefaultReminderLocalTime(offsetMinutes = 15): string {
+    const now = new Date();
+    const d = new Date(now.getTime() + offsetMinutes * 60_000);
+    const rounded = Math.ceil(d.getMinutes() / 5) * 5;
+    if (rounded >= 60) {
+        d.setHours(d.getHours() + 1);
+        d.setMinutes(0, 0, 0);
+    } else {
+        d.setMinutes(rounded, 0, 0);
+    }
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
+
+const COMMON_REMINDER_TIMES: Array<{ label: string; value: string }> = [
+    { label: 'Morning', value: '08:00' },
+    { label: 'Lunch', value: '12:00' },
+    { label: 'Evening', value: '18:00' },
+    { label: 'Night', value: '21:00' },
+];
 
 // ── Icon Picker ────────────────────────────────────────────────────────────────
 
@@ -141,7 +112,7 @@ function IconPicker({ selected, onSelect }: { selected: string; onSelect: (name:
                         onClick={() => onSelect(selected === name ? '' : name)}
                         title={name}
                     >
-                        <Icon size={18} />
+                        <Icon size={24} strokeWidth={2.25} />
                     </button>
                 ))}
             </div>
@@ -265,22 +236,9 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
 
         if (reminderTime) {
             try {
-                const reg = await registerServiceWorker();
-                if (reg) {
-                    const { publicKey } = await api.push.getVapidKey();
-                    if (publicKey) {
-                        const sub = await subscribeToPush(reg, publicKey);
-                        if (sub) {
-                            const json = sub.toJSON();
-                            await api.push.subscribe({
-                                endpoint: sub.endpoint,
-                                p256dh: (json.keys as Record<string, string>)?.p256dh ?? '',
-                                auth: (json.keys as Record<string, string>)?.auth ?? '',
-                            });
-                        } else {
-                            toast.error('Enable browser notifications to use reminders');
-                        }
-                    }
+                const synced = await syncPushSubscriptionOnDevice({ requestPermission: true });
+                if (!synced) {
+                    toast.error('Enable browser notifications to use reminders');
                 }
             } catch {
                 toast.error('Could not set up push notifications');
@@ -346,7 +304,7 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
                         onClick={() => setShowIconPicker(p => !p)}
                     >
                         {SelectedIcon
-                            ? <><SelectedIcon size={16} /> {icon}</>
+                            ? <><SelectedIcon size={20} strokeWidth={2.25} /> {icon}</>
                             : 'Choose icon…'}
                     </button>
                     {showIconPicker && (
@@ -439,14 +397,32 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
                         <button
                             type="button"
                             className="btn-set-reminder"
-                            onClick={() => setReminderTime('08:00')}
+                            onClick={() => setReminderTime(getDefaultReminderLocalTime())}
                         >
                             + Set a reminder
                         </button>
                     ) : (
                         <>
                             <div className="reminder-row">
-                                <TimePicker value={reminderTime} onChange={setReminderTime} />
+                                <input
+                                    type="time"
+                                    className="modal-input modal-input--time"
+                                    value={reminderTime}
+                                    onChange={e => setReminderTime(e.target.value)}
+                                    step={300}
+                                />
+                                <div className="quick-time-row">
+                                    {COMMON_REMINDER_TIMES.map(t => (
+                                        <button
+                                            key={t.value}
+                                            type="button"
+                                            className="btn-quick-time"
+                                            onClick={() => setReminderTime(t.value)}
+                                        >
+                                            {t.label}
+                                        </button>
+                                    ))}
+                                </div>
                                 <button type="button" className="btn-clear-time" onClick={() => setReminderTime('')}>
                                     Clear
                                 </button>

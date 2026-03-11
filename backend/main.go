@@ -167,6 +167,10 @@ func main() {
 			push.GET("/vapid-public", handleVapidPublic)
 			push.POST("/subscribe", requireAuth, requireCSRF, handlePushSubscribe)
 			push.DELETE("/unsubscribe", requireAuth, requireCSRF, handlePushUnsubscribe)
+			push.GET("/subscriptions", requireAuth, handlePushListSubscriptions)
+			push.PUT("/subscriptions/:id", requireAuth, requireCSRF, handlePushUpdateSubscription)
+			push.DELETE("/subscriptions/:id", requireAuth, requireCSRF, handlePushDeleteSubscription)
+			push.POST("/subscriptions/:id/test", requireAuth, requireCSRF, handlePushTestSubscription)
 		}
 	}
 

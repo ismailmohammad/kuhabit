@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
+	"errors"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 // ── Auth Rate Limiter ─────────────────────────────────────────────────────────
@@ -1029,16 +1031,53 @@ func handleVapidPublic(c *gin.Context) {
 func handlePushSubscribe(c *gin.Context) {
 	user := c.MustGet("user").(User)
 	var input struct {
-		Endpoint string `json:"endpoint" binding:"required"`
-		P256DH   string `json:"p256dh" binding:"required"`
-		Auth     string `json:"auth" binding:"required"`
+		Endpoint    string `json:"endpoint" binding:"required"`
+		P256DH      string `json:"p256dh" binding:"required"`
+		Auth        string `json:"auth" binding:"required"`
+		DeviceLabel string `json:"deviceLabel"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	sub := PushSubscription{UserID: user.ID, Endpoint: input.Endpoint, P256DH: input.P256DH, Auth: input.Auth}
-	db.Where(PushSubscription{UserID: user.ID, Endpoint: input.Endpoint}).FirstOrCreate(&sub)
+	now := time.Now().UTC()
+	ua := c.Request.UserAgent()
+
+	var sub PushSubscription
+	err := db.Where("user_id = ? AND endpoint = ?", user.ID, input.Endpoint).First(&sub).Error
+	if err == nil {
+		sub.P256DH = input.P256DH
+		sub.Auth = input.Auth
+		sub.UserAgent = ua
+		sub.DeviceLabel = strings.TrimSpace(input.DeviceLabel)
+		sub.Enabled = true
+		sub.LastSeenAt = &now
+		if saveErr := db.Save(&sub).Error; saveErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update subscription"})
+			return
+		}
+		c.JSON(http.StatusCreated, gin.H{"message": "Subscribed"})
+		return
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save subscription"})
+		return
+	}
+
+	sub = PushSubscription{
+		UserID:      user.ID,
+		Endpoint:    input.Endpoint,
+		P256DH:      input.P256DH,
+		Auth:        input.Auth,
+		UserAgent:   ua,
+		DeviceLabel: strings.TrimSpace(input.DeviceLabel),
+		Enabled:     true,
+		LastSeenAt:  &now,
+	}
+	if createErr := db.Create(&sub).Error; createErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save subscription"})
+		return
+	}
 	c.JSON(http.StatusCreated, gin.H{"message": "Subscribed"})
 }
 
@@ -1050,4 +1089,94 @@ func handlePushUnsubscribe(c *gin.Context) {
 	c.ShouldBindJSON(&input)
 	db.Where("user_id = ? AND endpoint = ?", user.ID, input.Endpoint).Delete(&PushSubscription{})
 	c.JSON(http.StatusOK, gin.H{"message": "Unsubscribed"})
+}
+
+func handlePushListSubscriptions(c *gin.Context) {
+	user := c.MustGet("user").(User)
+	var subs []PushSubscription
+	if err := db.Where("user_id = ?", user.ID).Order("created_at desc").Find(&subs).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load subscriptions"})
+		return
+	}
+	c.JSON(http.StatusOK, subs)
+}
+
+func handlePushUpdateSubscription(c *gin.Context) {
+	user := c.MustGet("user").(User)
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid subscription ID"})
+		return
+	}
+	var input struct {
+		Enabled *bool `json:"enabled" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil || input.Enabled == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "enabled is required"})
+		return
+	}
+
+	result := db.Model(&PushSubscription{}).
+		Where("id = ? AND user_id = ?", id, user.ID).
+		Updates(map[string]any{"enabled": *input.Enabled})
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update subscription"})
+		return
+	}
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Subscription not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Updated"})
+}
+
+func handlePushDeleteSubscription(c *gin.Context) {
+	user := c.MustGet("user").(User)
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid subscription ID"})
+		return
+	}
+	result := db.Where("id = ? AND user_id = ?", id, user.ID).Delete(&PushSubscription{})
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete subscription"})
+		return
+	}
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Subscription not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Deleted"})
+}
+
+func handlePushTestSubscription(c *gin.Context) {
+	user := c.MustGet("user").(User)
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid subscription ID"})
+		return
+	}
+
+	var sub PushSubscription
+	if err := db.Where("id = ? AND user_id = ?", id, user.ID).First(&sub).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Subscription not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load subscription"})
+		return
+	}
+
+	statusCode, sendErr := sendPushAndRecord(sub, "Stokely Test Notification", "If you see this, this device is configured correctly.")
+	if sendErr != nil {
+		c.JSON(http.StatusBadGateway, gin.H{
+			"error":      sendErr.Error(),
+			"statusCode": statusCode,
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"message":    "Test notification sent",
+		"statusCode": statusCode,
+	})
 }

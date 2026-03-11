@@ -1,4 +1,4 @@
-import type { HabitType, UserInfo, DashboardView, StreakDetail, AchievementType } from '../types/habit';
+import type { HabitType, UserInfo, DashboardView, StreakDetail, AchievementType, PushSubscriptionDevice } from '../types/habit';
 
 const BASE = '/api';
 
@@ -73,10 +73,18 @@ export const api = {
     },
     push: {
         getVapidKey: () => req<{ publicKey: string }>('/push/vapid-public'),
-        subscribe: (sub: { endpoint: string; p256dh: string; auth: string }) =>
+        subscribe: (sub: { endpoint: string; p256dh: string; auth: string; deviceLabel?: string }) =>
             req<void>('/push/subscribe', { method: 'POST', body: JSON.stringify(sub) }),
         unsubscribe: (endpoint: string) =>
             req<void>('/push/unsubscribe', { method: 'DELETE', body: JSON.stringify({ endpoint }) }),
+        listSubscriptions: () =>
+            req<PushSubscriptionDevice[]>('/push/subscriptions'),
+        updateSubscription: (id: number, enabled: boolean) =>
+            req<void>(`/push/subscriptions/${id}`, { method: 'PUT', body: JSON.stringify({ enabled }) }),
+        deleteSubscription: (id: number) =>
+            req<void>(`/push/subscriptions/${id}`, { method: 'DELETE' }),
+        testSubscription: (id: number) =>
+            req<{ message: string; statusCode: number }>(`/push/subscriptions/${id}/test`, { method: 'POST' }),
     },
     user: {
         exportData: () => req<unknown>('/user/export'),

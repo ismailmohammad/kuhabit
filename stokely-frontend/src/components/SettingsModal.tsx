@@ -5,6 +5,8 @@ import toast from 'react-hot-toast';
 import { api } from '../api/api';
 import { clearUserInfo, setUserInfo } from '../redux/userSlice';
 import type { RootState } from '../redux/store';
+import type { PushSubscriptionDevice } from '../types/habit';
+import { syncPushSubscriptionOnDevice } from '../utils/pushNotifications';
 import './SettingsModal.css';
 
 type Props = { onClose: () => void };
@@ -28,6 +30,21 @@ export default function SettingsModal({ onClose }: Props) {
 
     const [exportLoading, setExportLoading] = useState(false);
     const [dailySparkLoading, setDailySparkLoading] = useState(false);
+    const [pushLoading, setPushLoading] = useState(false);
+    const [pushSyncLoading, setPushSyncLoading] = useState(false);
+    const [subscriptions, setSubscriptions] = useState<PushSubscriptionDevice[]>([]);
+
+    const loadSubscriptions = async () => {
+        setPushLoading(true);
+        try {
+            const list = await api.push.listSubscriptions();
+            setSubscriptions(list);
+        } catch {
+            toast.error('Failed to load notification devices');
+        } finally {
+            setPushLoading(false);
+        }
+    };
 
     const handleChangePassword = async () => {
         if (newPw !== confirmPw) { toast.error('Passwords do not match'); return; }
@@ -98,6 +115,66 @@ export default function SettingsModal({ onClose }: Props) {
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
     }, [onClose]);
+
+    useEffect(() => {
+        void loadSubscriptions();
+    }, []);
+
+    const handleEnableOnThisDevice = async () => {
+        setPushSyncLoading(true);
+        try {
+            const ok = await syncPushSubscriptionOnDevice({ requestPermission: true, forceRefresh: true });
+            if (!ok) {
+                toast.error('Notifications are blocked on this device');
+                return;
+            }
+            toast.success('This device is now subscribed');
+            await loadSubscriptions();
+        } catch {
+            toast.error('Could not enable notifications on this device');
+        } finally {
+            setPushSyncLoading(false);
+        }
+    };
+
+    const handleToggleSubscription = async (id: number, enabled: boolean) => {
+        try {
+            await api.push.updateSubscription(id, enabled);
+            setSubscriptions(prev => prev.map(s => s.id === id ? { ...s, enabled } : s));
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : 'Failed to update notification setting');
+        }
+    };
+
+    const handleDeleteSubscription = async (id: number) => {
+        try {
+            await api.push.deleteSubscription(id);
+            setSubscriptions(prev => prev.filter(s => s.id !== id));
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : 'Failed to remove device');
+        }
+    };
+
+    const handleTestSubscription = async (id: number) => {
+        try {
+            const res = await api.push.testSubscription(id);
+            toast.success(`Test push accepted (${res.statusCode})`);
+            await loadSubscriptions();
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : 'Test notification failed');
+            await loadSubscriptions();
+        }
+    };
+
+    const renderSubscriptionName = (s: PushSubscriptionDevice): string => {
+        if (s.deviceLabel) return s.deviceLabel;
+        if (/iphone/i.test(s.userAgent)) return 'iPhone';
+        if (/ipad/i.test(s.userAgent)) return 'iPad';
+        if (/android/i.test(s.userAgent)) return 'Android Device';
+        if (/windows/i.test(s.userAgent)) return 'Windows PC';
+        if (/macintosh|mac os x/i.test(s.userAgent)) return 'Mac';
+        return 'Unknown Device';
+    };
 
     return (
         <div className="settings-modal-overlay" onClick={onClose}>
@@ -179,6 +256,69 @@ export default function SettingsModal({ onClose }: Props) {
                     >
                         {exportLoading ? 'Exporting…' : 'Download JSON'}
                     </button>
+                </section>
+
+                {/* Notifications by Device */}
+                <section className="settings-section">
+                    <h3 className="settings-section-title">Notifications by Device</h3>
+                    <p className="settings-desc">Manage which logged-in devices can receive reminders.</p>
+                    <button
+                        className="settings-btn settings-btn--primary"
+                        onClick={() => void handleEnableOnThisDevice()}
+                        disabled={pushSyncLoading}
+                    >
+                        {pushSyncLoading ? 'Enabling…' : 'Enable on This Device'}
+                    </button>
+                    {pushLoading ? (
+                        <p className="settings-desc">Loading devices…</p>
+                    ) : subscriptions.length === 0 ? (
+                        <p className="settings-desc">No devices subscribed yet.</p>
+                    ) : (
+                        <div className="settings-device-list">
+                            {subscriptions.map(sub => (
+                                <div key={sub.id} className="settings-device-item">
+                                    <div className="settings-device-meta">
+                                        <strong>{renderSubscriptionName(sub)}</strong>
+                                        <span>
+                                            {sub.lastSuccessAt
+                                                ? `Last delivered: ${new Date(sub.lastSuccessAt).toLocaleString()}`
+                                                : 'No successful deliveries yet'}
+                                        </span>
+                                        {sub.failureCount > 0 && (
+                                            <span className="settings-device-warning">
+                                                Failures: {sub.failureCount}
+                                                {sub.lastFailureCode ? ` (last ${sub.lastFailureCode})` : ''}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="settings-device-actions">
+                                        <label className="settings-toggle-inline">
+                                            <input
+                                                type="checkbox"
+                                                checked={sub.enabled}
+                                                onChange={e => void handleToggleSubscription(sub.id, e.target.checked)}
+                                            />
+                                            <span>{sub.enabled ? 'Enabled' : 'Disabled'}</span>
+                                        </label>
+                                        <button
+                                            type="button"
+                                            className="settings-btn settings-btn--secondary"
+                                            onClick={() => void handleTestSubscription(sub.id)}
+                                        >
+                                            Send Test
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="settings-btn settings-btn--secondary"
+                                            onClick={() => void handleDeleteSubscription(sub.id)}
+                                        >
+                                            Remove
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </section>
 
 
