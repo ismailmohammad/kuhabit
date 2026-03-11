@@ -50,8 +50,8 @@ type HabitLog struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	CreatedAt time.Time `json:"-"`
 	HabitID   uint      `gorm:"not null;uniqueIndex:idx_habit_log" json:"habitId"`
-	UserID    string    `gorm:"type:uuid;not null;index;uniqueIndex:idx_habit_log" json:"-"`
-	LogDate   time.Time `gorm:"type:date;not null;uniqueIndex:idx_habit_log" json:"logDate"`
+	UserID    string    `gorm:"type:uuid;not null;index;uniqueIndex:idx_habit_log;index:idx_hl_user_date,composite:user_id" json:"-"`
+	LogDate   time.Time `gorm:"type:date;not null;uniqueIndex:idx_habit_log;index:idx_hl_user_date,composite:log_date" json:"logDate"`
 	WasFrozen bool      `gorm:"default:false" json:"wasFrozen"`
 }
 

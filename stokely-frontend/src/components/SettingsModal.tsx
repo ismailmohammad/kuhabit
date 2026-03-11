@@ -26,6 +26,8 @@ export default function SettingsModal({ onClose }: Props) {
     const [newEmail, setNewEmail] = useState('');
     const [emailLoading, setEmailLoading] = useState(false);
     const [emailSent, setEmailSent] = useState(false);
+    const [removeEmailStep, setRemoveEmailStep] = useState(false);
+    const [removeEmailLoading, setRemoveEmailLoading] = useState(false);
 
     // Delete account
     const [deleteStep, setDeleteStep] = useState(false);
@@ -133,6 +135,20 @@ export default function SettingsModal({ onClose }: Props) {
             toast.error(err instanceof Error ? err.message : 'Deletion failed');
         } finally {
             setDeleteLoading(false);
+        }
+    };
+
+    const handleRemoveEmail = async () => {
+        setRemoveEmailLoading(true);
+        try {
+            await api.auth.removeEmail();
+            dispatch(setUserInfo({ ...userInfo!, email: undefined, emailVerified: false }));
+            setRemoveEmailStep(false);
+            toast.success('Email removed from your account');
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : 'Failed to remove email');
+        } finally {
+            setRemoveEmailLoading(false);
         }
     };
 
@@ -307,6 +323,27 @@ export default function SettingsModal({ onClose }: Props) {
                         <p className="settings-desc" style={{ color: '#2dca8e' }}>
                             ✓ Check your inbox for a verification link.
                         </p>
+                    ) : removeEmailStep ? (
+                        <div className="delete-confirm-box">
+                            <p className="delete-warning">
+                                ⚠️ Without an email you <strong>cannot recover your account</strong> if you forget your password.
+                            </p>
+                            <div className="delete-actions">
+                                <button
+                                    className="settings-btn settings-btn--secondary"
+                                    onClick={() => setRemoveEmailStep(false)}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    className="settings-btn settings-btn--danger"
+                                    onClick={() => void handleRemoveEmail()}
+                                    disabled={removeEmailLoading}
+                                >
+                                    {removeEmailLoading ? 'Removing…' : 'Remove Email'}
+                                </button>
+                            </div>
+                        </div>
                     ) : (
                         <>
                             <input
@@ -324,6 +361,15 @@ export default function SettingsModal({ onClose }: Props) {
                             >
                                 {emailLoading ? 'Sending…' : 'Send Verification Email'}
                             </button>
+                            {userInfo?.email && (
+                                <button
+                                    className="settings-btn settings-btn--danger"
+                                    style={{ marginTop: '0.5rem' }}
+                                    onClick={() => setRemoveEmailStep(true)}
+                                >
+                                    Remove Email
+                                </button>
+                            )}
                         </>
                     )}
                 </section>

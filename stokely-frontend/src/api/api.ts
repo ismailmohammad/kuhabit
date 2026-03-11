@@ -52,6 +52,8 @@ export const api = {
             req<{ dailySparkEnabled: boolean }>('/auth/daily-spark', { method: 'PUT', body: JSON.stringify({ enabled }) }),
         sendVerifyEmail: (email: string) =>
             req<void>('/auth/email/verify', { method: 'POST', body: JSON.stringify({ email }) }),
+        removeEmail: () =>
+            req<void>('/auth/email', { method: 'DELETE', body: JSON.stringify({ confirm: true }) }),
         verifyEmail: (token: string) =>
             req<{ message: string }>('/auth/email/verify?token=' + encodeURIComponent(token)),
         forgotPassword: (username: string) =>

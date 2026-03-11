@@ -147,6 +147,7 @@ func main() {
 			auth.PUT("/daily-spark", requireAuth, requireCSRF, handleDailySparkPreference)
 			auth.POST("/email/verify", requireAuth, requireCSRF, handleSendVerificationEmail)
 			auth.GET("/email/verify", handleVerifyEmail)
+			auth.DELETE("/email", requireAuth, requireCSRF, handleRemoveEmail)
 			auth.POST("/password/forgot", handleForgotPassword)
 			auth.POST("/password/reset", handleResetPassword)
 		}

@@ -25,6 +25,16 @@ func smtpConfigured() bool {
 		getEnv("SMTP_PASS", "") != ""
 }
 
+// extractEmailAddress pulls the bare address out of "Display Name <addr>" or returns the string as-is.
+func extractEmailAddress(addr string) string {
+	if start := strings.LastIndex(addr, "<"); start != -1 {
+		if end := strings.LastIndex(addr, ">"); end > start {
+			return strings.TrimSpace(addr[start+1 : end])
+		}
+	}
+	return strings.TrimSpace(addr)
+}
+
 func sendEmail(to, subject, htmlBody string) error {
 	host := getEnv("SMTP_HOST", "")
 	port := getEnv("SMTP_PORT", "587")
@@ -34,6 +44,8 @@ func sendEmail(to, subject, htmlBody string) error {
 	if host == "" || user == "" || pass == "" {
 		return fmt.Errorf("SMTP not configured (set SMTP_HOST, SMTP_USER, SMTP_PASS)")
 	}
+	// MAIL FROM envelope must be a bare address — no display name or angle brackets.
+	envelopeFrom := extractEmailAddress(from)
 
 	msg := "MIME-Version: 1.0\r\n" +
 		"From: " + from + "\r\n" +
@@ -60,7 +72,7 @@ func sendEmail(to, subject, htmlBody string) error {
 		if err := c.Auth(auth); err != nil {
 			return err
 		}
-		if err := c.Mail(user); err != nil {
+		if err := c.Mail(envelopeFrom); err != nil {
 			return err
 		}
 		if err := c.Rcpt(to); err != nil {
@@ -77,7 +89,7 @@ func sendEmail(to, subject, htmlBody string) error {
 	}
 
 	// STARTTLS (port 587 / 25)
-	return smtp.SendMail(addr, auth, user, []string{to}, []byte(msg))
+	return smtp.SendMail(addr, auth, envelopeFrom, []string{to}, []byte(msg))
 }
 
 // ── HTML Email Templates ───────────────────────────────────────────────────────
@@ -85,6 +97,7 @@ func sendEmail(to, subject, htmlBody string) error {
 func emailWrapper(preheader, bodyContent string) string {
 	base := appURL()
 	logoURL := base + "/icon-192.png"
+	kindlingURL := base + "/kindling-hands-out.png"
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -106,6 +119,14 @@ func emailWrapper(preheader, bodyContent string) string {
             <img src="` + logoURL + `" alt="Stokely" width="72" height="72"
                  style="display:block;border-radius:18px;border:0;">
             <p style="margin:10px 0 0;font-size:1.15rem;font-weight:700;letter-spacing:-0.02em;color:#2dca8e;">Stokely</p>
+          </td>
+        </tr>
+
+        <!-- Mascot row -->
+        <tr>
+          <td align="center" style="padding-bottom:20px;">
+            <img src="` + kindlingURL + `" alt="Kindling mascot" width="164"
+                 style="display:block;border:0;max-width:100%;height:auto;">
           </td>
         </tr>
 

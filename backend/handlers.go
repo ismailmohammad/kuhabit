@@ -135,7 +135,25 @@ func computeStreak(habit Habit, userID string, referenceDate time.Time) (streak 
 		loggedDates[l.LogDate.UTC().Truncate(24*time.Hour).Format("2006-01-02")] = true
 	}
 
-	streak = 0
+	streak = streakFromLoggedDates(habit, loggedDates, today, windowStart)
+	return streak, hasFreeze
+}
+
+// computeStreakFromLogs computes streak using pre-loaded data (no DB calls).
+// logsByHabit maps habitID → logs already fetched for the 90-day window.
+func computeStreakFromLogs(habit Habit, logsByHabit map[uint][]HabitLog, referenceDate time.Time) int {
+	today := referenceDate.UTC().Truncate(24 * time.Hour)
+	windowStart := today.AddDate(0, 0, -90)
+
+	loggedDates := map[string]bool{}
+	for _, l := range logsByHabit[habit.ID] {
+		loggedDates[l.LogDate.UTC().Truncate(24*time.Hour).Format("2006-01-02")] = true
+	}
+	return streakFromLoggedDates(habit, loggedDates, today, windowStart)
+}
+
+func streakFromLoggedDates(habit Habit, loggedDates map[string]bool, today, windowStart time.Time) int {
+	streak := 0
 	for d := today; !d.Before(windowStart); d = d.AddDate(0, 0, -1) {
 		if !containsDay(habit.Recurrence, dayCode(d)) {
 			continue
@@ -153,7 +171,7 @@ func computeStreak(habit Habit, userID string, referenceDate time.Time) (streak 
 			break
 		}
 	}
-	return streak, hasFreeze
+	return streak
 }
 
 func habitToResponse(h Habit, complete bool, streak int, hasFreeze bool, frozenToday bool) HabitResponse {
@@ -639,6 +657,25 @@ func getHabits(c *gin.Context) {
 		frozenTodayIDs[l.HabitID] = true
 	}
 
+	// Batch-load streak data once for all habits (avoids N+1).
+	var freeze StreakFreeze
+	db.Where("user_id = ?", user.ID).First(&freeze)
+	hasFreeze := freeze.Count > 0
+
+	windowStart := time.Now().UTC().Truncate(24 * time.Hour).AddDate(0, 0, -90)
+	logsByHabit := map[uint][]HabitLog{}
+	if len(habits) > 0 {
+		habitIDs := make([]uint, len(habits))
+		for i, h := range habits {
+			habitIDs[i] = h.ID
+		}
+		var streakLogs []HabitLog
+		db.Where("habit_id IN ? AND log_date >= ?", habitIDs, windowStart).Find(&streakLogs)
+		for _, l := range streakLogs {
+			logsByHabit[l.HabitID] = append(logsByHabit[l.HabitID], l)
+		}
+	}
+
 	todayKey := dayCode(targetDate)
 
 	result := make([]HabitResponse, 0, len(habits))
@@ -658,7 +695,7 @@ func getHabits(c *gin.Context) {
 			streakRefDate = maxDate
 		}
 
-		streak, hasFreeze := computeStreak(h, user.ID, streakRefDate)
+		streak := computeStreakFromLogs(h, logsByHabit, streakRefDate)
 		result = append(result, habitToResponse(h, completedIDs[h.ID], streak, hasFreeze, frozenTodayIDs[h.ID]))
 	}
 
@@ -1352,6 +1389,12 @@ func handleSendVerificationEmail(c *gin.Context) {
 	}
 	addr := strings.ToLower(strings.TrimSpace(input.Email))
 
+	// Reject if this is already their verified email.
+	if user.Email != nil && strings.EqualFold(*user.Email, addr) && user.EmailVerified {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "That email is already verified on your account"})
+		return
+	}
+
 	// Reject if another verified user already owns this email.
 	var existing User
 	if err := db.Where("email = ? AND email_verified = true AND id != ?", addr, user.ID).First(&existing).Error; err == nil {
@@ -1399,6 +1442,33 @@ func handleVerifyEmail(c *gin.Context) {
 	}
 	db.Delete(&et)
 	c.JSON(http.StatusOK, gin.H{"message": "Email verified successfully"})
+}
+
+func handleRemoveEmail(c *gin.Context) {
+	user := c.MustGet("user").(User)
+	if user.Email == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No email address on this account"})
+		return
+	}
+
+	var input struct {
+		// Client must explicitly confirm they understand password recovery is lost.
+		Confirm bool `json:"confirm" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil || !input.Confirm {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "confirm must be true"})
+		return
+	}
+
+	// Delete any pending email/reset tokens for this user.
+	db.Where("user_id = ?", user.ID).Delete(&EmailToken{})
+
+	if err := db.Model(&User{}).Where("id = ?", user.ID).
+		Updates(map[string]any{"email": nil, "email_verified": false}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to remove email"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Email removed"})
 }
 
 // ── Password Reset ────────────────────────────────────────────────────────────
