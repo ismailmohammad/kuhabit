@@ -69,8 +69,16 @@ func main() {
 
 	router := gin.Default()
 
-	allowedOrigins := []string{
-		getEnv("FRONTEND_ORIGIN", "http://localhost:5173"),
+	allowedOrigins := []string{}
+	for _, origin := range strings.Split(getEnv("FRONTEND_ORIGIN", ""), ",") {
+		trimmed := strings.TrimSpace(origin)
+		if trimmed == "" {
+			continue
+		}
+		allowedOrigins = append(allowedOrigins, trimmed)
+	}
+	if len(allowedOrigins) == 0 {
+		log.Fatal("FRONTEND_ORIGIN environment variable is required")
 	}
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     allowedOrigins,

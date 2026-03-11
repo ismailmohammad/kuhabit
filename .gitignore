@@ -4,4 +4,5 @@
 node_modules/
 dist/
 backend/server
-backend/*.exebackend/backend
+backend/*.exe
+backend/backend
