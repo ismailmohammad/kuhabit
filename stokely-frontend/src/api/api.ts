@@ -2,10 +2,31 @@ import type { HabitType, UserInfo, DashboardView, StreakDetail, AchievementType 
 
 const BASE = '/api';
 
+function getCookie(name: string): string | null {
+    const encodedName = `${encodeURIComponent(name)}=`;
+    const parts = document.cookie.split(';');
+    for (const part of parts) {
+        const trimmed = part.trim();
+        if (trimmed.startsWith(encodedName)) {
+            return decodeURIComponent(trimmed.slice(encodedName.length));
+        }
+    }
+    return null;
+}
+
 async function req<T>(path: string, options?: RequestInit): Promise<T> {
+    const method = (options?.method ?? 'GET').toUpperCase();
+    const csrfToken = getCookie('stokely-csrf');
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && csrfToken) {
+        headers['X-CSRF-Token'] = csrfToken;
+    }
     const res = await fetch(`${BASE}${path}`, {
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            ...headers,
+            ...(options?.headers as Record<string, string> | undefined),
+        },
         ...options,
     });
     if (!res.ok) {

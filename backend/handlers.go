@@ -1,6 +1,9 @@
 package main
 
 import (
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/base64"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -192,6 +195,96 @@ func isWelcomePending(user *User) bool {
 	return !user.WelcomeSeen
 }
 
+func setAuthenticatedSession(c *gin.Context, userID string) error {
+	session := sessions.Default(c)
+	session.Clear()
+	session.Set("userID", userID)
+	token, err := generateCSRFToken()
+	if err != nil {
+		return err
+	}
+	session.Set("csrfToken", token)
+	if err := session.Save(); err != nil {
+		return err
+	}
+	setCSRFCookie(c, token)
+	return nil
+}
+
+func clearSession(c *gin.Context) error {
+	session := sessions.Default(c)
+	session.Clear()
+	if err := session.Save(); err != nil {
+		return err
+	}
+	clearCSRFCookie(c)
+	return nil
+}
+
+func generateCSRFToken() (string, error) {
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+func setCSRFCookie(c *gin.Context, token string) {
+	c.SetSameSite(sessionCookieSameSite)
+	c.SetCookie("stokely-csrf", token, sessionMaxAgeSeconds, "/", sessionCookieDomain, sessionCookieSecure, false)
+}
+
+func clearCSRFCookie(c *gin.Context) {
+	c.SetSameSite(sessionCookieSameSite)
+	c.SetCookie("stokely-csrf", "", -1, "/", sessionCookieDomain, sessionCookieSecure, false)
+}
+
+func requireCSRF(c *gin.Context) {
+	switch c.Request.Method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		c.Next()
+		return
+	}
+
+	session := sessions.Default(c)
+	raw := session.Get("csrfToken")
+	token, ok := raw.(string)
+	if !ok || token == "" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "CSRF token missing"})
+		c.Abort()
+		return
+	}
+
+	headerToken := c.GetHeader("X-CSRF-Token")
+	if headerToken == "" || subtle.ConstantTimeCompare([]byte(headerToken), []byte(token)) != 1 {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Invalid CSRF token"})
+		c.Abort()
+		return
+	}
+
+	c.Next()
+}
+
+func ensureCSRFFromSession(c *gin.Context, session sessions.Session) error {
+	raw := session.Get("csrfToken")
+	token, ok := raw.(string)
+	if ok && token != "" {
+		setCSRFCookie(c, token)
+		return nil
+	}
+
+	newToken, err := generateCSRFToken()
+	if err != nil {
+		return err
+	}
+	session.Set("csrfToken", newToken)
+	if err := session.Save(); err != nil {
+		return err
+	}
+	setCSRFCookie(c, newToken)
+	return nil
+}
+
 func longestStreakEver(h Habit, logs []HabitLog) int {
 	if len(logs) == 0 {
 		return 0
@@ -289,9 +382,10 @@ func handleRegister(c *gin.Context) {
 	// Give every new user 3 streak freezes to start
 	db.Create(&StreakFreeze{UserID: user.ID, Count: 3})
 
-	session := sessions.Default(c)
-	session.Set("userID", user.ID)
-	session.Save()
+	if err := setAuthenticatedSession(c, user.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
+		return
+	}
 
 	showWelcome := isWelcomePending(&user)
 	c.JSON(http.StatusCreated, gin.H{
@@ -328,9 +422,10 @@ func handleLogin(c *gin.Context) {
 		return
 	}
 
-	session := sessions.Default(c)
-	session.Set("userID", user.ID)
-	session.Save()
+	if err := setAuthenticatedSession(c, user.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
+		return
+	}
 
 	showWelcome := isWelcomePending(&user)
 	c.JSON(http.StatusOK, gin.H{
@@ -343,9 +438,10 @@ func handleLogin(c *gin.Context) {
 }
 
 func handleLogout(c *gin.Context) {
-	session := sessions.Default(c)
-	session.Clear()
-	session.Save()
+	if err := clearSession(c); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clear session"})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out"})
 }
 
@@ -404,6 +500,11 @@ func requireAuth(c *gin.Context) {
 	var user User
 	if result := db.First(&user, "id = ?", userID); result.Error != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		c.Abort()
+		return
+	}
+	if err := ensureCSRFFromSession(c, session); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize CSRF session"})
 		c.Abort()
 		return
 	}
@@ -911,9 +1012,10 @@ func handleDeleteAccount(c *gin.Context) {
 	db.Where("user_id = ?", user.ID).Delete(&Habit{})
 	db.Delete(&user)
 
-	session := sessions.Default(c)
-	session.Clear()
-	session.Save()
+	if err := clearSession(c); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clear session"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Account deleted"})
 }

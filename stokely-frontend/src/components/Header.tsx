@@ -1,5 +1,5 @@
 import styled from "styled-components";
-import LogoImage from '../assets/header-logo.png';
+import LogoImage from '../assets/fiery-cube-green.png';
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { clearUserInfo } from "../redux/userSlice";

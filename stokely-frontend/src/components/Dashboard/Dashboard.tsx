@@ -33,6 +33,11 @@ import KindleIdeaLeft from '../../assets/kindling/kindle_idea_left.png';
 import KindleIdeaRight from '../../assets/kindling/kindle_idea_right.png';
 import { DAILY_SPARK_LIBRARY } from '../../assets/kindling/dailySparks';
 
+interface BeforeInstallPromptEvent extends Event {
+    prompt: () => Promise<void>;
+    userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+}
+
 const negativeLogos = [CubeRedTop, CubeRedRight, CubeRedLeft];
 const positiveLogos = [CubeGreenLeft, CubeGreenRight, CubeGreenTop];
 
@@ -51,6 +56,7 @@ function randomItem<T>(items: T[]): T {
 
 const ALL_TAB_PAGE_SIZE = 20;
 const ACHIEVEMENT_SEEN_KEY_PREFIX = 'stokely_seen_achievements_v1';
+const INSTALL_PROMPT_DISMISSED_KEY_PREFIX = 'stokely_install_prompt_dismissed_v1';
 const DAILY_SPARK_IMAGES = [KindleIdeaLeft, KindleIdeaRight];
 const ACHIEVEMENT_ORDER: AchievementType[] = [
     { key: 'first_completion', title: 'First Completion', description: 'Complete your first habit log.', unlocked: false },
@@ -480,6 +486,38 @@ const WelcomeDismissBtn = styled.button`
     cursor: pointer;
 `;
 
+const InstallTitle = styled.p`
+    margin: 0 0 0.35rem;
+    color: #2dca8e;
+    font-size: 0.98rem;
+    font-weight: 800;
+`;
+
+const InstallText = styled.p`
+    margin: 0;
+    color: #e9e9e9;
+    font-size: 0.92rem;
+    line-height: 1.45;
+`;
+
+const InstallActions = styled.div`
+    margin-top: 0.85rem;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.45rem;
+`;
+
+const InstallBtn = styled.button`
+    background: #2dca8e;
+    color: #111;
+    border: none;
+    border-radius: 8px;
+    padding: 0.48rem 0.9rem;
+    font-size: 0.84rem;
+    font-weight: 800;
+    cursor: pointer;
+`;
+
 // ── Confirm modal ──────────────────────────────────────────────────────────────
 
 const ConfirmOverlay = styled.div<{ $closing: boolean }>`
@@ -597,6 +635,9 @@ export default function Dashboard() {
     const [showDailySparkOverlay, setShowDailySparkOverlay] = useState(false);
     const [dailySparkImage, setDailySparkImage] = useState(KindleIdeaLeft);
     const [dailySparkMessage, setDailySparkMessage] = useState('');
+    const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+    const [installPlatform, setInstallPlatform] = useState<'ios' | 'android' | null>(null);
+    const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
     const [allVisibleCount, setAllVisibleCount] = useState(ALL_TAB_PAGE_SIZE);
     const allLoadMoreRef = useRef<HTMLDivElement | null>(null);
     const hasShownDailySparkRef = useRef(false);
@@ -610,6 +651,9 @@ export default function Dashboard() {
     const userInfo = useSelector((state: RootState) => state.user.userInfo);
     const achievementSeenKey = userInfo?.id
         ? `${ACHIEVEMENT_SEEN_KEY_PREFIX}_${userInfo.id}`
+        : null;
+    const installPromptDismissedKey = userInfo?.id
+        ? `${INSTALL_PROMPT_DISMISSED_KEY_PREFIX}_${userInfo.id}`
         : null;
 
     const [logoMap] = useState<Map<number, string>>(new Map());
@@ -740,6 +784,16 @@ export default function Dashboard() {
         setShowDailySparkOverlay(false);
     }, []);
 
+    const dismissInstallPrompt = useCallback(() => {
+        setShowInstallPrompt(false);
+        if (!installPromptDismissedKey) return;
+        try {
+            localStorage.setItem(installPromptDismissedKey, '1');
+        } catch {
+            // ignore storage failures
+        }
+    }, [installPromptDismissedKey]);
+
     useEffect(() => {
         if (!userInfo?.id) {
             hasShownDailySparkRef.current = false;
@@ -763,6 +817,71 @@ export default function Dashboard() {
             setShowDailySparkOverlay(false);
         }
     }, [userInfo?.dailySparkEnabled]);
+
+    useEffect(() => {
+        if (!installPromptDismissedKey) return;
+
+        const nav = window.navigator as Navigator & { standalone?: boolean };
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || nav.standalone === true;
+        if (isStandalone) return;
+
+        let dismissed = false;
+        try {
+            dismissed = localStorage.getItem(installPromptDismissedKey) === '1';
+        } catch {
+            dismissed = false;
+        }
+        if (dismissed) return;
+
+        const ua = navigator.userAgent || '';
+        const isAndroid = /android/i.test(ua);
+        const isIOS = /iPad|iPhone|iPod/.test(ua) ||
+            (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        if (!isAndroid && !isIOS) return;
+
+        setInstallPlatform(isIOS ? 'ios' : 'android');
+
+        let promptTimer: number | null = null;
+        if (isIOS) {
+            promptTimer = window.setTimeout(() => setShowInstallPrompt(true), 900);
+        } else {
+            promptTimer = window.setTimeout(() => setShowInstallPrompt(true), 1200);
+        }
+
+        const onBeforeInstallPrompt = (event: Event) => {
+            const e = event as BeforeInstallPromptEvent;
+            e.preventDefault();
+            setDeferredInstallPrompt(e);
+            setShowInstallPrompt(true);
+        };
+
+        const onAppInstalled = () => {
+            dismissInstallPrompt();
+            setDeferredInstallPrompt(null);
+        };
+
+        window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+        window.addEventListener('appinstalled', onAppInstalled);
+        return () => {
+            if (promptTimer !== null) window.clearTimeout(promptTimer);
+            window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+            window.removeEventListener('appinstalled', onAppInstalled);
+        };
+    }, [dismissInstallPrompt, installPromptDismissedKey]);
+
+    const triggerAndroidInstall = useCallback(async () => {
+        if (!deferredInstallPrompt) {
+            dismissInstallPrompt();
+            return;
+        }
+        try {
+            await deferredInstallPrompt.prompt();
+            await deferredInstallPrompt.userChoice;
+        } finally {
+            setDeferredInstallPrompt(null);
+            dismissInstallPrompt();
+        }
+    }, [deferredInstallPrompt, dismissInstallPrompt]);
 
     useEffect(() => {
         if (!showDailySparkOverlay || showWelcomeOverlay) return;
@@ -1141,6 +1260,35 @@ export default function Dashboard() {
                                 Dismiss
                             </WelcomeDismissBtn>
                         </WelcomeActions>
+                    </WelcomeCard>
+                </WelcomeOverlay>
+            )}
+
+            {showInstallPrompt && !showWelcomeOverlay && !showDailySparkOverlay && (
+                <WelcomeOverlay onClick={dismissInstallPrompt}>
+                    <WelcomeCard onClick={e => e.stopPropagation()}>
+                        <WelcomeBubble>
+                            <InstallTitle>Add Stokely to your home screen</InstallTitle>
+                            {installPlatform === 'ios' ? (
+                                <InstallText>
+                                    In Safari, tap the Share button, then choose Add to Home Screen.
+                                </InstallText>
+                            ) : (
+                                <InstallText>
+                                    Install Stokely for a full-screen app experience and faster access.
+                                </InstallText>
+                            )}
+                        </WelcomeBubble>
+                        <InstallActions>
+                            <WelcomeDismissBtn type="button" onClick={dismissInstallPrompt}>
+                                Not now
+                            </WelcomeDismissBtn>
+                            {installPlatform === 'android' && (
+                                <InstallBtn type="button" onClick={() => { void triggerAndroidInstall(); }}>
+                                    Install
+                                </InstallBtn>
+                            )}
+                        </InstallActions>
                     </WelcomeCard>
                 </WelcomeOverlay>
             )}

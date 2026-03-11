@@ -118,6 +118,14 @@ See `.env.example` for all variables. Required:
 | `COOKIE_SECURE` | Set `true` in production (enforces HTTPS-only cookies) |
 | `DOCKER_USERNAME` | Docker Hub username for `deploy.sh` |
 
+Cookie/session settings:
+
+| Variable | Description |
+|---|---|
+| `SESSION_ENCRYPTION_KEY` | Base64 key for encrypted session payloads (decoded length 16/24/32 bytes). Strongly recommended in production (`openssl rand -base64 32`). |
+| `COOKIE_DOMAIN` | Leave empty for host-only cookies (recommended). Set only if you intentionally need cross-subdomain cookies. |
+| `COOKIE_SAMESITE` | `lax` (recommended), `strict`, or `none`. If `none`, backend requires `COOKIE_SECURE=true`. |
+
 Optional (Web Push notifications):
 
 | Variable | Description |
@@ -125,6 +133,13 @@ Optional (Web Push notifications):
 | `VAPID_PUBLIC_KEY` | Generate with `npx web-push generate-vapid-keys` |
 | `VAPID_PRIVATE_KEY` | Same as above |
 | `VAPID_EMAIL` | Contact email for push service |
+
+### Security Requirements
+
+- Stateful authenticated API requests require a CSRF token (`X-CSRF-Token`) in addition to the session cookie.
+- In production, use HTTPS with `COOKIE_SECURE=true`.
+- Do not use a short `SESSION_SECRET` (must be 32+ characters).
+- Legacy numeric `users.id` schemas are no longer auto-migrated or auto-dropped. Backend fails closed until a manual UUID migration/reset is completed.
 
 ---
 

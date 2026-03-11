@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"log"
 	"net"
@@ -22,6 +23,10 @@ import (
 )
 
 var db *gorm.DB
+var sessionCookieDomain string
+var sessionCookieSecure bool
+var sessionCookieSameSite http.SameSite
+var sessionMaxAgeSeconds = 86400 * 7
 
 func main() {
 	var err error
@@ -68,7 +73,7 @@ func main() {
 		log.Fatal("Failed to ensure pgcrypto extension:", err)
 	}
 
-	migrateLegacyUserIDSchemaIfNeeded()
+	enforceUUIDUserIDSchema()
 
 	db.AutoMigrate(&User{}, &Habit{}, &HabitLog{}, &PushSubscription{}, &StreakFreeze{})
 	seedInitialStreakFreezes()
@@ -89,7 +94,7 @@ func main() {
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     allowedOrigins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "X-CSRF-Token"},
 		AllowCredentials: true,
 	}))
 
@@ -97,15 +102,32 @@ func main() {
 	if secret == "" {
 		log.Fatal("SESSION_SECRET environment variable is required")
 	}
-	store := cookie.NewStore([]byte(secret))
+	if len(secret) < 32 {
+		log.Fatal("SESSION_SECRET must be at least 32 characters")
+	}
+
+	store := buildSessionStore(secret)
+	sessionCookieSameSite = parseSameSite(getEnv("COOKIE_SAMESITE", "lax"))
+	sessionCookieSecure = getEnv("COOKIE_SECURE", "") == "true"
+	sessionCookieDomain = getEnv("COOKIE_DOMAIN", "")
+	if sessionCookieSameSite == http.SameSiteNoneMode && !sessionCookieSecure {
+		log.Fatal("COOKIE_SAMESITE=none requires COOKIE_SECURE=true")
+	}
+
+	sessionName := "stokely-session"
+	if sessionCookieSecure && sessionCookieDomain == "" {
+		// __Host- cookies are host-only, Secure, Path=/ and avoid domain-scope ambiguity.
+		sessionName = "__Host-stokely-session"
+	}
 	store.Options(sessions.Options{
 		Path:     "/",
-		MaxAge:   86400 * 7, // 7 days
+		Domain:   sessionCookieDomain,
+		MaxAge:   sessionMaxAgeSeconds,
 		HttpOnly: true,
-		Secure:   getEnv("COOKIE_SECURE", "") == "true",
-		SameSite: http.SameSiteLaxMode,
+		Secure:   sessionCookieSecure,
+		SameSite: sessionCookieSameSite,
 	})
-	router.Use(sessions.Sessions("stokely-session", store))
+	router.Use(sessions.Sessions(sessionName, store))
 
 	api := router.Group("/api")
 	{
@@ -113,11 +135,11 @@ func main() {
 		{
 			auth.POST("/register", handleRegister)
 			auth.POST("/login", handleLogin)
-			auth.POST("/logout", handleLogout)
+			auth.POST("/logout", requireAuth, requireCSRF, handleLogout)
 			auth.GET("/me", requireAuth, handleMe)
-			auth.PUT("/password", requireAuth, handleChangePassword)
-			auth.POST("/welcome-seen", requireAuth, handleWelcomeSeen)
-			auth.PUT("/daily-spark", requireAuth, handleDailySparkPreference)
+			auth.PUT("/password", requireAuth, requireCSRF, handleChangePassword)
+			auth.POST("/welcome-seen", requireAuth, requireCSRF, handleWelcomeSeen)
+			auth.PUT("/daily-spark", requireAuth, requireCSRF, handleDailySparkPreference)
 		}
 
 		habits := api.Group("/habits")
@@ -125,11 +147,11 @@ func main() {
 		{
 			habits.GET("", getHabits)
 			habits.GET("/achievements", getAchievements)
-			habits.POST("", createHabit)
-			habits.PUT("/:id", updateHabit)
-			habits.DELETE("/:id", deleteHabit)
-			habits.POST("/:id/log", createHabitLog)
-			habits.DELETE("/:id/log", deleteHabitLog)
+			habits.POST("", requireCSRF, createHabit)
+			habits.PUT("/:id", requireCSRF, updateHabit)
+			habits.DELETE("/:id", requireCSRF, deleteHabit)
+			habits.POST("/:id/log", requireCSRF, createHabitLog)
+			habits.DELETE("/:id/log", requireCSRF, deleteHabitLog)
 			habits.GET("/:id/streak", getHabitStreak)
 		}
 
@@ -137,14 +159,14 @@ func main() {
 		user.Use(requireAuth)
 		{
 			user.GET("/export", handleExportData)
-			user.DELETE("/account", handleDeleteAccount)
+			user.DELETE("/account", requireCSRF, handleDeleteAccount)
 		}
 
 		push := api.Group("/push")
 		{
 			push.GET("/vapid-public", handleVapidPublic)
-			push.POST("/subscribe", requireAuth, handlePushSubscribe)
-			push.DELETE("/unsubscribe", requireAuth, handlePushUnsubscribe)
+			push.POST("/subscribe", requireAuth, requireCSRF, handlePushSubscribe)
+			push.DELETE("/unsubscribe", requireAuth, requireCSRF, handlePushUnsubscribe)
 		}
 	}
 
@@ -213,7 +235,7 @@ func seedInitialStreakFreezes() {
 	}
 }
 
-func migrateLegacyUserIDSchemaIfNeeded() {
+func enforceUUIDUserIDSchema() {
 	if !db.Migrator().HasTable(&User{}) {
 		return
 	}
@@ -226,15 +248,7 @@ func migrateLegacyUserIDSchemaIfNeeded() {
 		return
 	}
 
-	log.Println("Detected legacy numeric users.id schema.")
-	if hasAnyAppData() {
-		log.Fatal("Cannot auto-migrate users.id to UUID because app tables contain data. Empty app tables first, then restart backend.")
-	}
-
-	log.Println("App tables are empty. Recreating schema for UUID user IDs.")
-	if err := db.Migrator().DropTable(&HabitLog{}, &PushSubscription{}, &StreakFreeze{}, &Habit{}, &User{}); err != nil {
-		log.Fatal("Failed to drop legacy tables:", err)
-	}
+	log.Fatal("Detected legacy numeric users.id schema. Manual migration required: recreate app tables as UUID-based before starting backend.")
 }
 
 func usersIDIsUUID() (bool, error) {
@@ -256,19 +270,32 @@ func usersIDIsUUID() (bool, error) {
 	return r.DataType == "uuid", nil
 }
 
-func hasAnyAppData() bool {
-	tables := []string{"users", "habits", "habit_logs", "push_subscriptions", "streak_freezes"}
-	for _, table := range tables {
-		if !db.Migrator().HasTable(table) {
-			continue
-		}
-		var count int64
-		if err := db.Table(table).Count(&count).Error; err != nil {
-			log.Fatalf("Failed to count rows in %s: %v", table, err)
-		}
-		if count > 0 {
-			return true
-		}
+func parseSameSite(v string) http.SameSite {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "strict":
+		return http.SameSiteStrictMode
+	case "none":
+		return http.SameSiteNoneMode
+	default:
+		return http.SameSiteLaxMode
 	}
-	return false
+}
+
+func buildSessionStore(secret string) cookie.Store {
+	encryptionKeyB64 := getEnv("SESSION_ENCRYPTION_KEY", "")
+	if encryptionKeyB64 == "" {
+		log.Println("SESSION_ENCRYPTION_KEY not set: session payload will be signed but not encrypted")
+		return cookie.NewStore([]byte(secret))
+	}
+
+	encryptionKey, err := base64.StdEncoding.DecodeString(encryptionKeyB64)
+	if err != nil {
+		log.Fatal("SESSION_ENCRYPTION_KEY must be valid base64")
+	}
+	switch len(encryptionKey) {
+	case 16, 24, 32:
+	default:
+		log.Fatal("SESSION_ENCRYPTION_KEY decoded length must be 16, 24, or 32 bytes")
+	}
+	return cookie.NewStore([]byte(secret), encryptionKey)
 }
