@@ -53,6 +53,7 @@ const LoginPage = () => {
                         minLength={8}
                         autoComplete="current-password"
                     />
+                    <Link to="/forgot-password" className="forgot-password">Forgot password?</Link>
                     <button className="auth-submit" type="submit" disabled={loading}>
                         {loading ? "Logging in…" : "Log in"}
                     </button>

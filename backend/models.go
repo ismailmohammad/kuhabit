@@ -7,6 +7,7 @@ type User struct {
 	CreatedAt         time.Time `json:"-"`
 	Username          string    `gorm:"type:varchar(50);uniqueIndex;not null" json:"username"`
 	Email             *string   `gorm:"type:varchar(255);uniqueIndex" json:"email,omitempty"`
+	EmailVerified     bool      `gorm:"default:false" json:"-"`
 	Password          string    `gorm:"type:varchar(255);not null" json:"-"`
 	WelcomeSeen       bool      `gorm:"default:false" json:"-"`
 	DailySparkEnabled bool      `gorm:"default:true" json:"-"`
@@ -40,6 +41,7 @@ type HabitResponse struct {
 	ReminderTime  string     `json:"reminderTime"`
 	Streak        int        `json:"streak"`
 	HasFreeze     bool       `json:"hasFreeze"`
+	FrozenToday   bool       `json:"frozenToday"`
 }
 
 // HabitLog records one completion of a habit on a specific calendar date.
@@ -74,4 +76,24 @@ type StreakFreeze struct {
 	ID     uint   `gorm:"primaryKey" json:"-"`
 	UserID string `gorm:"type:uuid;not null;uniqueIndex" json:"-"`
 	Count  int    `gorm:"default:0" json:"count"`
+}
+
+// EmailToken stores pending email verifications and password reset requests.
+type EmailToken struct {
+	Token     string    `gorm:"type:varchar(64);primaryKey"`
+	UserID    string    `gorm:"type:uuid;not null;index"`
+	Email     string    `gorm:"type:varchar(255);not null"` // email being verified or user's email for reset
+	Type      string    `gorm:"type:varchar(16);not null"`  // "verify" or "reset"
+	ExpiresAt time.Time `gorm:"not null"`
+	CreatedAt time.Time
+}
+
+// UserSession tracks active login sessions server-side so they can be listed and revoked.
+type UserSession struct {
+	ID         string    `gorm:"type:varchar(64);primaryKey" json:"id"`
+	UserID     string    `gorm:"type:uuid;not null;index" json:"-"`
+	CreatedAt  time.Time `json:"createdAt"`
+	LastSeenAt time.Time `json:"lastSeenAt"`
+	UserAgent  string    `gorm:"type:text;default:''" json:"userAgent"`
+	IPAddress  string    `gorm:"type:varchar(64);default:''" json:"ipAddress"`
 }

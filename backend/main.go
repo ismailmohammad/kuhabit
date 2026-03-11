@@ -75,10 +75,15 @@ func main() {
 
 	enforceUUIDUserIDSchema()
 
-	db.AutoMigrate(&User{}, &Habit{}, &HabitLog{}, &PushSubscription{}, &StreakFreeze{})
+	db.AutoMigrate(&User{}, &Habit{}, &HabitLog{}, &PushSubscription{}, &StreakFreeze{}, &UserSession{}, &EmailToken{})
+	// Trust emails that existed before the verification system was added.
+	db.Exec("UPDATE users SET email_verified = true WHERE email IS NOT NULL AND email_verified = false")
 	seedInitialStreakFreezes()
 
 	router := gin.Default()
+	// Trust only private RFC1918 ranges — the backend is reachable only from
+	// Docker-internal containers (nginx → backend), never directly from the internet.
+	router.SetTrustedProxies([]string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"})
 
 	allowedOrigins := []string{}
 	for _, origin := range strings.Split(getEnv("FRONTEND_ORIGIN", ""), ",") {
@@ -140,6 +145,10 @@ func main() {
 			auth.PUT("/password", requireAuth, requireCSRF, handleChangePassword)
 			auth.POST("/welcome-seen", requireAuth, requireCSRF, handleWelcomeSeen)
 			auth.PUT("/daily-spark", requireAuth, requireCSRF, handleDailySparkPreference)
+			auth.POST("/email/verify", requireAuth, requireCSRF, handleSendVerificationEmail)
+			auth.GET("/email/verify", handleVerifyEmail)
+			auth.POST("/password/forgot", handleForgotPassword)
+			auth.POST("/password/reset", handleResetPassword)
 		}
 
 		habits := api.Group("/habits")
@@ -162,6 +171,14 @@ func main() {
 			user.DELETE("/account", requireCSRF, handleDeleteAccount)
 		}
 
+		sessionsGroup := api.Group("/sessions")
+		sessionsGroup.Use(requireAuth)
+		{
+			sessionsGroup.GET("", handleListSessions)
+			sessionsGroup.DELETE("/:id", requireCSRF, handleDeleteSession)
+			sessionsGroup.POST("/logout-others", requireCSRF, handleLogoutOtherSessions)
+		}
+
 		push := api.Group("/push")
 		{
 			push.GET("/vapid-public", handleVapidPublic)
@@ -172,6 +189,20 @@ func main() {
 			push.DELETE("/subscriptions/:id", requireAuth, requireCSRF, handlePushDeleteSubscription)
 			push.POST("/subscriptions/:id/test", requireAuth, requireCSRF, handlePushTestSubscription)
 		}
+	}
+
+	if smtpConfigured() {
+		log.Printf("SMTP configured: host=%s port=%s user=%s",
+			getEnv("SMTP_HOST", ""), getEnv("SMTP_PORT", "587"), getEnv("SMTP_USER", ""))
+	} else {
+		log.Printf("SMTP NOT configured — SMTP_HOST=%q SMTP_USER=%q SMTP_PASS=%s",
+			getEnv("SMTP_HOST", ""), getEnv("SMTP_USER", ""),
+			func() string {
+				if getEnv("SMTP_PASS", "") != "" {
+					return "(set)"
+				}
+				return "(empty)"
+			}())
 	}
 
 	startScheduler()

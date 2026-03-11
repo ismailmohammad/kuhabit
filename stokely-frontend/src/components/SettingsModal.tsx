@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import { api } from '../api/api';
 import { clearUserInfo, setUserInfo } from '../redux/userSlice';
 import type { RootState } from '../redux/store';
-import type { PushSubscriptionDevice } from '../types/habit';
+import type { PushSubscriptionDevice, UserSession } from '../types/habit';
 import { syncPushSubscriptionOnDevice } from '../utils/pushNotifications';
 import './SettingsModal.css';
 
@@ -22,11 +22,53 @@ export default function SettingsModal({ onClose }: Props) {
     const [confirmPw, setConfirmPw] = useState('');
     const [pwLoading, setPwLoading] = useState(false);
 
+    // Email update
+    const [newEmail, setNewEmail] = useState('');
+    const [emailLoading, setEmailLoading] = useState(false);
+    const [emailSent, setEmailSent] = useState(false);
+
     // Delete account
     const [deleteStep, setDeleteStep] = useState(false);
     const [deleteAck, setDeleteAck] = useState(false);
     const [deletePw, setDeletePw] = useState('');
     const [deleteLoading, setDeleteLoading] = useState(false);
+
+    const [sessions, setSessions] = useState<UserSession[]>([]);
+    const [sessionsLoading, setSessionsLoading] = useState(false);
+    const [logoutOthersLoading, setLogoutOthersLoading] = useState(false);
+
+    const loadSessions = async () => {
+        setSessionsLoading(true);
+        try {
+            setSessions(await api.sessions.list());
+        } catch {
+            toast.error('Failed to load sessions');
+        } finally {
+            setSessionsLoading(false);
+        }
+    };
+
+    const handleDeleteSession = async (id: string) => {
+        try {
+            await api.sessions.logout(id);
+            setSessions(prev => prev.filter(s => s.id !== id));
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : 'Failed to terminate session');
+        }
+    };
+
+    const handleLogoutOthers = async () => {
+        setLogoutOthersLoading(true);
+        try {
+            await api.sessions.logoutOthers();
+            setSessions(prev => prev.filter(s => s.isCurrent));
+            toast.success('All other sessions terminated');
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : 'Failed to terminate sessions');
+        } finally {
+            setLogoutOthersLoading(false);
+        }
+    };
 
     const [exportLoading, setExportLoading] = useState(false);
     const [dailySparkLoading, setDailySparkLoading] = useState(false);
@@ -94,6 +136,21 @@ export default function SettingsModal({ onClose }: Props) {
         }
     };
 
+    const handleSendVerifyEmail = async () => {
+        if (!newEmail.trim()) return;
+        setEmailLoading(true);
+        try {
+            await api.auth.sendVerifyEmail(newEmail.trim());
+            setEmailSent(true);
+            setNewEmail('');
+            toast.success('Verification email sent — check your inbox');
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : 'Failed to send verification email');
+        } finally {
+            setEmailLoading(false);
+        }
+    };
+
     const handleDailySparkToggle = async (enabled: boolean) => {
         if (!userInfo) return;
         setDailySparkLoading(true);
@@ -118,6 +175,7 @@ export default function SettingsModal({ onClose }: Props) {
 
     useEffect(() => {
         void loadSubscriptions();
+        void loadSessions();
     }, []);
 
     const handleEnableOnThisDevice = async () => {
@@ -164,6 +222,16 @@ export default function SettingsModal({ onClose }: Props) {
             toast.error(err instanceof Error ? err.message : 'Test notification failed');
             await loadSubscriptions();
         }
+    };
+
+    const renderSessionDevice = (ua: string): string => {
+        if (/iphone/i.test(ua)) return 'iPhone';
+        if (/ipad/i.test(ua)) return 'iPad';
+        if (/android/i.test(ua)) return 'Android Device';
+        if (/windows/i.test(ua)) return 'Windows PC';
+        if (/macintosh|mac os x/i.test(ua)) return 'Mac';
+        if (ua === '') return 'Unknown Device';
+        return 'Browser';
     };
 
     const renderSubscriptionName = (s: PushSubscriptionDevice): string => {
@@ -220,14 +288,44 @@ export default function SettingsModal({ onClose }: Props) {
                     </button>
                 </section>
 
-                {/* Update Email — disabled */}
-                <section className="settings-section settings-section--disabled">
+                {/* Email */}
+                <section className="settings-section">
                     <h3 className="settings-section-title">
-                        Update Email
-                        <span className="settings-badge">Coming Soon</span>
+                        {userInfo?.email ? 'Update Email' : 'Add Email'}
                     </h3>
-                    <input type="email" className="settings-input" disabled placeholder="New email address" />
-                    <button className="settings-btn settings-btn--primary" disabled>Update Email</button>
+                    {userInfo?.email ? (
+                        <p className="settings-desc">
+                            Current: <strong style={{ color: '#ddd' }}>{userInfo.email}</strong>
+                            {userInfo.emailVerified
+                                ? <span className="settings-session-current" style={{ marginLeft: '0.5rem' }}>Verified</span>
+                                : <span style={{ marginLeft: '0.5rem', fontSize: '0.72rem', color: '#f0a66a' }}>Unverified</span>}
+                        </p>
+                    ) : (
+                        <p className="settings-desc">Add a verified email to enable password recovery.</p>
+                    )}
+                    {emailSent ? (
+                        <p className="settings-desc" style={{ color: '#2dca8e' }}>
+                            ✓ Check your inbox for a verification link.
+                        </p>
+                    ) : (
+                        <>
+                            <input
+                                type="email"
+                                className="settings-input"
+                                placeholder={userInfo?.email ? 'New email address' : 'you@example.com'}
+                                value={newEmail}
+                                onChange={e => setNewEmail(e.target.value)}
+                                autoComplete="email"
+                            />
+                            <button
+                                className="settings-btn settings-btn--primary"
+                                onClick={() => void handleSendVerifyEmail()}
+                                disabled={emailLoading || !newEmail.trim()}
+                            >
+                                {emailLoading ? 'Sending…' : 'Send Verification Email'}
+                            </button>
+                        </>
+                    )}
                 </section>
 
                 {/* Daily SPark */}
@@ -322,6 +420,52 @@ export default function SettingsModal({ onClose }: Props) {
                 </section>
 
 
+
+                {/* Active Sessions */}
+                <section className="settings-section">
+                    <h3 className="settings-section-title">Active Sessions</h3>
+                    <p className="settings-desc">Devices currently logged into your account.</p>
+                    {sessions.filter(s => !s.isCurrent).length > 1 && (
+                        <button
+                            className="settings-btn settings-btn--secondary"
+                            onClick={() => void handleLogoutOthers()}
+                            disabled={logoutOthersLoading}
+                        >
+                            {logoutOthersLoading ? 'Signing out…' : 'Sign Out All Other Devices'}
+                        </button>
+                    )}
+                    {sessionsLoading ? (
+                        <p className="settings-desc">Loading sessions…</p>
+                    ) : sessions.length === 0 ? (
+                        <p className="settings-desc">No active sessions found.</p>
+                    ) : (
+                        <div className="settings-device-list">
+                            {sessions.map(s => (
+                                <div key={s.id} className="settings-device-item">
+                                    <div className="settings-device-meta">
+                                        <strong>
+                                            {renderSessionDevice(s.userAgent)}
+                                            {s.isCurrent && <span className="settings-session-current">Current</span>}
+                                        </strong>
+                                        <span>Signed in: {new Date(s.createdAt).toLocaleString()}</span>
+                                        <span>Last active: {new Date(s.lastSeenAt).toLocaleString()}</span>
+                                    </div>
+                                    {!s.isCurrent && (
+                                        <div className="settings-device-actions">
+                                            <button
+                                                type="button"
+                                                className="settings-btn settings-btn--secondary"
+                                                onClick={() => void handleDeleteSession(s.id)}
+                                            >
+                                                Sign Out
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </section>
 
                 {/* Delete Account */}
                 <section className="settings-section settings-section--danger">

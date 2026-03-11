@@ -126,7 +126,7 @@ function Habit({ habitData, imgSrc, onToggleComplete, onEdit }: HabitProps) {
                     {isStreaking && (
                         <span className="streak-badge">🔥 {habitData.streak}</span>
                     )}
-                    {habitData.hasFreeze && habitData.streak >= 1 && (
+                    {habitData.frozenToday && (
                         <span className="freeze-badge">❄️</span>
                     )}
                 </button>

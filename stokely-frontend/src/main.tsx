@@ -10,6 +10,9 @@ import store from './redux/store.ts';
 import { Provider } from 'react-redux'
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import LoginPage from './components/UserActionPages/LoginPage.tsx'
+import ForgotPasswordPage from './components/UserActionPages/ForgotPasswordPage.tsx'
+import ResetPasswordPage from './components/UserActionPages/ResetPasswordPage.tsx'
+import VerifyEmailPage from './components/UserActionPages/VerifyEmailPage.tsx'
 import { Toaster } from 'react-hot-toast'
 
 const router = createBrowserRouter([
@@ -22,6 +25,9 @@ const router = createBrowserRouter([
       { path: "dashboard", element: <Dashboard /> },
       { path: "login", element: <LoginPage /> },
       { path: "register", element: <RegisterPage /> },
+      { path: "forgot-password", element: <ForgotPasswordPage /> },
+      { path: "reset-password", element: <ResetPasswordPage /> },
+      { path: "verify-email", element: <VerifyEmailPage /> },
     ],
   },
 ]);

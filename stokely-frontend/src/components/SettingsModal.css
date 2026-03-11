@@ -244,6 +244,19 @@
     height: 0.95rem;
 }
 
+.settings-session-current {
+    display: inline-block;
+    margin-left: 0.45rem;
+    font-size: 0.68rem;
+    font-weight: 500;
+    background: #1a3a2a;
+    color: #2dca8e;
+    border: 1px solid #2dca8e44;
+    padding: 1px 7px;
+    border-radius: 10px;
+    vertical-align: middle;
+}
+
 /* Delete confirm */
 .delete-confirm-box {
     display: flex;

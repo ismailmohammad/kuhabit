@@ -1,4 +1,4 @@
-import type { HabitType, UserInfo, DashboardView, StreakDetail, AchievementType, PushSubscriptionDevice } from '../types/habit';
+import type { HabitType, UserInfo, DashboardView, StreakDetail, AchievementType, PushSubscriptionDevice, UserSession } from '../types/habit';
 
 const BASE = '/api';
 
@@ -50,6 +50,14 @@ export const api = {
         markWelcomeSeen: () => req<void>('/auth/welcome-seen', { method: 'POST' }),
         setDailySparkEnabled: (enabled: boolean) =>
             req<{ dailySparkEnabled: boolean }>('/auth/daily-spark', { method: 'PUT', body: JSON.stringify({ enabled }) }),
+        sendVerifyEmail: (email: string) =>
+            req<void>('/auth/email/verify', { method: 'POST', body: JSON.stringify({ email }) }),
+        verifyEmail: (token: string) =>
+            req<{ message: string }>('/auth/email/verify?token=' + encodeURIComponent(token)),
+        forgotPassword: (username: string) =>
+            req<{ message: string }>('/auth/password/forgot', { method: 'POST', body: JSON.stringify({ username }) }),
+        resetPassword: (token: string, newPassword: string) =>
+            req<{ message: string }>('/auth/password/reset', { method: 'POST', body: JSON.stringify({ token, newPassword }) }),
     },
     habits: {
         list: (view: DashboardView = 'daily', date?: string) =>
@@ -85,6 +93,11 @@ export const api = {
             req<void>(`/push/subscriptions/${id}`, { method: 'DELETE' }),
         testSubscription: (id: number) =>
             req<{ message: string; statusCode: number }>(`/push/subscriptions/${id}/test`, { method: 'POST' }),
+    },
+    sessions: {
+        list: () => req<UserSession[]>('/sessions'),
+        logout: (id: string) => req<void>(`/sessions/${id}`, { method: 'DELETE' }),
+        logoutOthers: () => req<void>('/sessions/logout-others', { method: 'POST' }),
     },
     user: {
         exportData: () => req<unknown>('/user/export'),

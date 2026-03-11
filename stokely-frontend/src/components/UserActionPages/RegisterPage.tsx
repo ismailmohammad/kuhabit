@@ -26,7 +26,11 @@ const RegisterPage = () => {
         try {
             const user = await api.auth.register(username, password, email || undefined);
             dispatch(setUserInfo(user));
-            toast.success("Account created!");
+            if (user.emailPending) {
+                toast.success("Account created! Check your email to verify your address.", { duration: 6000 });
+            } else {
+                toast.success("Account created!");
+            }
             navigate("/dashboard");
         } catch (err: any) {
             toast.error(err.message || "Registration failed");

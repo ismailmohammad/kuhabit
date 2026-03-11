@@ -10,6 +10,7 @@ export interface HabitType {
     reminderTime: string;     // "HH:MM" UTC, "" = no reminder
     streak: number;
     hasFreeze: boolean;
+    frozenToday: boolean;
     createdAt: string;
 }
 
@@ -17,6 +18,8 @@ export interface UserInfo {
     id: string;
     username: string;
     email?: string;
+    emailVerified?: boolean;
+    emailPending?: boolean;
     showWelcome?: boolean;
     dailySparkEnabled?: boolean;
 }
@@ -42,6 +45,15 @@ export interface AchievementType {
     title: string;
     description: string;
     unlocked: boolean;
+}
+
+export interface UserSession {
+    id: string;
+    createdAt: string;
+    lastSeenAt: string;
+    userAgent: string;
+    ipAddress: string;
+    isCurrent: boolean;
 }
 
 export interface PushSubscriptionDevice {

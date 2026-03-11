@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -155,7 +156,7 @@ func computeStreak(habit Habit, userID string, referenceDate time.Time) (streak 
 	return streak, hasFreeze
 }
 
-func habitToResponse(h Habit, complete bool, streak int, hasFreeze bool) HabitResponse {
+func habitToResponse(h Habit, complete bool, streak int, hasFreeze bool, frozenToday bool) HabitResponse {
 	return HabitResponse{
 		ID:            h.ID,
 		CreatedAt:     h.CreatedAt,
@@ -169,7 +170,18 @@ func habitToResponse(h Habit, complete bool, streak int, hasFreeze bool) HabitRe
 		ReminderTime:  h.ReminderTime,
 		Streak:        streak,
 		HasFreeze:     hasFreeze,
+		FrozenToday:   frozenToday,
 	}
+}
+
+// todayFrozen checks whether a frozen HabitLog exists for today for the given habit.
+func todayFrozen(habitID uint, userID string) bool {
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	var count int64
+	db.Model(&HabitLog{}).
+		Where("habit_id = ? AND user_id = ? AND log_date = ? AND was_frozen = true", habitID, userID, today).
+		Count(&count)
+	return count > 0
 }
 
 // awardFreezeIfMilestone grants the user one streak freeze at every 7-day streak milestone.
@@ -198,9 +210,14 @@ func isWelcomePending(user *User) bool {
 }
 
 func setAuthenticatedSession(c *gin.Context, userID string) error {
+	sessionID, err := generateSessionID()
+	if err != nil {
+		return err
+	}
 	session := sessions.Default(c)
 	session.Clear()
 	session.Set("userID", userID)
+	session.Set("sessionID", sessionID)
 	token, err := generateCSRFToken()
 	if err != nil {
 		return err
@@ -210,6 +227,14 @@ func setAuthenticatedSession(c *gin.Context, userID string) error {
 		return err
 	}
 	setCSRFCookie(c, token)
+	now := time.Now().UTC()
+	db.Create(&UserSession{
+		ID:         sessionID,
+		UserID:     userID,
+		LastSeenAt: now,
+		UserAgent:  c.Request.UserAgent(),
+		IPAddress:  c.ClientIP(),
+	})
 	return nil
 }
 
@@ -225,6 +250,14 @@ func clearSession(c *gin.Context) error {
 
 func generateCSRFToken() (string, error) {
 	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+func generateSessionID() (string, error) {
+	buf := make([]byte, 24)
 	if _, err := rand.Read(buf); err != nil {
 		return "", err
 	}
@@ -363,9 +396,9 @@ func handleRegister(c *gin.Context) {
 		return
 	}
 
+	// Email is verified via a separate flow; don't store it on the user at registration.
 	user := User{
 		Username:          input.Username,
-		Email:             input.Email,
 		Password:          string(hash),
 		DailySparkEnabled: true,
 	}
@@ -373,8 +406,6 @@ func handleRegister(c *gin.Context) {
 		errMsg := result.Error.Error()
 		if strings.Contains(errMsg, "username") || strings.Contains(errMsg, "unique") {
 			c.JSON(http.StatusConflict, gin.H{"error": "Username already taken"})
-		} else if strings.Contains(errMsg, "email") {
-			c.JSON(http.StatusConflict, gin.H{"error": "Email already in use"})
 		} else {
 			c.JSON(http.StatusConflict, gin.H{"error": "Registration failed"})
 		}
@@ -389,11 +420,21 @@ func handleRegister(c *gin.Context) {
 		return
 	}
 
+	// If an email was provided, queue a verification email (don't store until verified).
+	emailPending := false
+	if input.Email != nil {
+		if err := queueEmailVerification(user.ID, user.Username, *input.Email); err == nil {
+			emailPending = true
+		}
+	}
+
 	showWelcome := isWelcomePending(&user)
 	c.JSON(http.StatusCreated, gin.H{
 		"id":                user.ID,
 		"username":          user.Username,
 		"email":             user.Email,
+		"emailVerified":     user.EmailVerified,
+		"emailPending":      emailPending,
 		"showWelcome":       showWelcome,
 		"dailySparkEnabled": user.DailySparkEnabled,
 	})
@@ -434,12 +475,18 @@ func handleLogin(c *gin.Context) {
 		"id":                user.ID,
 		"username":          user.Username,
 		"email":             user.Email,
+		"emailVerified":     user.EmailVerified,
 		"showWelcome":       showWelcome,
 		"dailySparkEnabled": user.DailySparkEnabled,
 	})
 }
 
 func handleLogout(c *gin.Context) {
+	if sid, exists := c.Get("sessionID"); exists {
+		if id, ok := sid.(string); ok && id != "" {
+			db.Where("id = ?", id).Delete(&UserSession{})
+		}
+	}
 	if err := clearSession(c); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clear session"})
 		return
@@ -454,6 +501,7 @@ func handleMe(c *gin.Context) {
 		"id":                user.ID,
 		"username":          user.Username,
 		"email":             user.Email,
+		"emailVerified":     user.EmailVerified,
 		"showWelcome":       showWelcome,
 		"dailySparkEnabled": user.DailySparkEnabled,
 	})
@@ -497,6 +545,25 @@ func requireAuth(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid session"})
 		c.Abort()
 		return
+	}
+
+	// Validate session ID against DB (sessions created before this feature lack a sessionID
+	// and are allowed through for backward compatibility until they log in again).
+	if rawSID := session.Get("sessionID"); rawSID != nil {
+		sessionID, _ := rawSID.(string)
+		if sessionID != "" {
+			var userSession UserSession
+			if err := db.Where("id = ? AND user_id = ?", sessionID, userID).First(&userSession).Error; err != nil {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Session revoked"})
+				c.Abort()
+				return
+			}
+			// Throttle LastSeenAt updates to avoid a write on every request.
+			if time.Since(userSession.LastSeenAt) > 5*time.Minute {
+				db.Model(&userSession).UpdateColumn("last_seen_at", time.Now().UTC())
+			}
+			c.Set("sessionID", sessionID)
+		}
 	}
 
 	var user User
@@ -564,6 +631,14 @@ func getHabits(c *gin.Context) {
 		completedIDs[l.HabitID] = true
 	}
 
+	// Load frozen logs for targetDate so we can set frozenToday correctly.
+	var frozenLogs []HabitLog
+	db.Where("user_id = ? AND log_date = ? AND was_frozen = true", user.ID, targetDate).Find(&frozenLogs)
+	frozenTodayIDs := map[uint]bool{}
+	for _, l := range frozenLogs {
+		frozenTodayIDs[l.HabitID] = true
+	}
+
 	todayKey := dayCode(targetDate)
 
 	result := make([]HabitResponse, 0, len(habits))
@@ -584,7 +659,7 @@ func getHabits(c *gin.Context) {
 		}
 
 		streak, hasFreeze := computeStreak(h, user.ID, streakRefDate)
-		result = append(result, habitToResponse(h, completedIDs[h.ID], streak, hasFreeze))
+		result = append(result, habitToResponse(h, completedIDs[h.ID], streak, hasFreeze, frozenTodayIDs[h.ID]))
 	}
 
 	c.JSON(http.StatusOK, result)
@@ -625,7 +700,7 @@ func createHabit(c *gin.Context) {
 		ReminderTime:  input.ReminderTime,
 	}
 	db.Create(&habit)
-	c.JSON(http.StatusCreated, habitToResponse(habit, false, 0, false))
+	c.JSON(http.StatusCreated, habitToResponse(habit, false, 0, false, false))
 }
 
 func updateHabit(c *gin.Context) {
@@ -709,7 +784,7 @@ func updateHabit(c *gin.Context) {
 	complete := todayComplete(habit.ID, user.ID)
 	today := time.Now().UTC().Truncate(24 * time.Hour)
 	streak, hasFreeze := computeStreak(habit, user.ID, today)
-	c.JSON(http.StatusOK, habitToResponse(habit, complete, streak, hasFreeze))
+	c.JSON(http.StatusOK, habitToResponse(habit, complete, streak, hasFreeze, todayFrozen(habit.ID, user.ID)))
 }
 
 func deleteHabit(c *gin.Context) {
@@ -1011,6 +1086,7 @@ func handleDeleteAccount(c *gin.Context) {
 	db.Where("user_id = ?", user.ID).Delete(&HabitLog{})
 	db.Where("user_id = ?", user.ID).Delete(&PushSubscription{})
 	db.Where("user_id = ?", user.ID).Delete(&StreakFreeze{})
+	db.Where("user_id = ?", user.ID).Delete(&UserSession{})
 	db.Where("user_id = ?", user.ID).Delete(&Habit{})
 	db.Delete(&user)
 
@@ -1179,4 +1255,246 @@ func handlePushTestSubscription(c *gin.Context) {
 		"message":    "Test notification sent",
 		"statusCode": statusCode,
 	})
+}
+
+// ── Session Management ────────────────────────────────────────────────────────
+
+func handleListSessions(c *gin.Context) {
+	user := c.MustGet("user").(User)
+	currentSID, _ := c.Get("sessionID")
+
+	var userSessions []UserSession
+	if err := db.Where("user_id = ?", user.ID).Order("last_seen_at desc").Find(&userSessions).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sessions"})
+		return
+	}
+
+	type sessionResp struct {
+		UserSession
+		IsCurrent bool `json:"isCurrent"`
+	}
+	result := make([]sessionResp, len(userSessions))
+	for i, s := range userSessions {
+		result[i] = sessionResp{UserSession: s, IsCurrent: s.ID == currentSID}
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+func handleDeleteSession(c *gin.Context) {
+	user := c.MustGet("user").(User)
+	targetID := c.Param("id")
+	currentSID, _ := c.Get("sessionID")
+	if targetID == currentSID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Use logout to end the current session"})
+		return
+	}
+	result := db.Where("id = ? AND user_id = ?", targetID, user.ID).Delete(&UserSession{})
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to terminate session"})
+		return
+	}
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Session not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Session terminated"})
+}
+
+func handleLogoutOtherSessions(c *gin.Context) {
+	user := c.MustGet("user").(User)
+	currentSID, _ := c.Get("sessionID")
+	q := db.Where("user_id = ?", user.ID)
+	if id, ok := currentSID.(string); ok && id != "" {
+		q = q.Where("id != ?", id)
+	}
+	if err := q.Delete(&UserSession{}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to terminate sessions"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "All other sessions terminated"})
+}
+
+// ── Email Verification ────────────────────────────────────────────────────────
+
+// queueEmailVerification creates an EmailToken and sends a verification email.
+// It replaces any existing pending "verify" token for this user.
+func queueEmailVerification(userID, username, email string) error {
+	if !smtpConfigured() {
+		return fmt.Errorf("SMTP not configured")
+	}
+	db.Where("user_id = ? AND type = ?", userID, "verify").Delete(&EmailToken{})
+	token, err := generateSessionID()
+	if err != nil {
+		return err
+	}
+	et := EmailToken{
+		Token:     token,
+		UserID:    userID,
+		Email:     strings.ToLower(strings.TrimSpace(email)),
+		Type:      "verify",
+		ExpiresAt: time.Now().UTC().Add(24 * time.Hour),
+	}
+	if err := db.Create(&et).Error; err != nil {
+		return err
+	}
+	verifyURL := appURL() + "/verify-email?token=" + token
+	return sendEmail(email, "Verify your Stokely email address", verifyEmailHTML(username, verifyURL))
+}
+
+func handleSendVerificationEmail(c *gin.Context) {
+	user := c.MustGet("user").(User)
+	var input struct {
+		Email string `json:"email" binding:"required,email,max=255"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Valid email address required"})
+		return
+	}
+	addr := strings.ToLower(strings.TrimSpace(input.Email))
+
+	// Reject if another verified user already owns this email.
+	var existing User
+	if err := db.Where("email = ? AND email_verified = true AND id != ?", addr, user.ID).First(&existing).Error; err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "Email already in use"})
+		return
+	}
+
+	if err := queueEmailVerification(user.ID, user.Username, addr); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send verification email: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Verification email sent"})
+}
+
+func handleVerifyEmail(c *gin.Context) {
+	token := strings.TrimSpace(c.Query("token"))
+	if token == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Token required"})
+		return
+	}
+
+	var et EmailToken
+	if err := db.Where("token = ? AND type = ?", token, "verify").First(&et).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired verification link"})
+		return
+	}
+	if time.Now().UTC().After(et.ExpiresAt) {
+		db.Delete(&et)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Verification link has expired. Please request a new one."})
+		return
+	}
+
+	// Check email not already taken by another verified user.
+	var conflict User
+	if err := db.Where("email = ? AND email_verified = true AND id != ?", et.Email, et.UserID).First(&conflict).Error; err == nil {
+		db.Delete(&et)
+		c.JSON(http.StatusConflict, gin.H{"error": "Email already in use by another account"})
+		return
+	}
+
+	if err := db.Model(&User{}).Where("id = ?", et.UserID).
+		Updates(map[string]any{"email": et.Email, "email_verified": true}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update email"})
+		return
+	}
+	db.Delete(&et)
+	c.JSON(http.StatusOK, gin.H{"message": "Email verified successfully"})
+}
+
+// ── Password Reset ────────────────────────────────────────────────────────────
+
+func handleForgotPassword(c *gin.Context) {
+	if !checkAuthRateLimit(c) {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many attempts, please try again later"})
+		return
+	}
+	var input struct {
+		Username string `json:"username" binding:"required,max=50"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	var user User
+	if err := db.Where("username = ?", input.Username).First(&user).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "No account found with that username"})
+		return
+	}
+	if user.Email == nil || !user.EmailVerified {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "This account has no verified email address. Account recovery is not available."})
+		return
+	}
+
+	if !smtpConfigured() {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Email service not configured"})
+		return
+	}
+
+	// Delete any existing reset token for this user.
+	db.Where("user_id = ? AND type = ?", user.ID, "reset").Delete(&EmailToken{})
+
+	token, err := generateSessionID()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate reset token"})
+		return
+	}
+	et := EmailToken{
+		Token:     token,
+		UserID:    user.ID,
+		Email:     *user.Email,
+		Type:      "reset",
+		ExpiresAt: time.Now().UTC().Add(10 * time.Minute),
+	}
+	if err := db.Create(&et).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create reset token"})
+		return
+	}
+	resetURL := appURL() + "/reset-password?token=" + token
+	if err := sendEmail(*user.Email, "Reset your Stokely password", resetPasswordHTML(user.Username, resetURL)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send reset email"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Password reset email sent"})
+}
+
+func handleResetPassword(c *gin.Context) {
+	if !checkAuthRateLimit(c) {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many attempts, please try again later"})
+		return
+	}
+	var input struct {
+		Token       string `json:"token" binding:"required"`
+		NewPassword string `json:"newPassword" binding:"required,min=8,max=128"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	var et EmailToken
+	if err := db.Where("token = ? AND type = ?", input.Token, "reset").First(&et).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired reset link"})
+		return
+	}
+	if time.Now().UTC().After(et.ExpiresAt) {
+		db.Delete(&et)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Reset link has expired. Please request a new one."})
+		return
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(input.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process password"})
+		return
+	}
+	if err := db.Model(&User{}).Where("id = ?", et.UserID).
+		UpdateColumn("password", string(hash)).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update password"})
+		return
+	}
+	// Invalidate all sessions so old-password cookies stop working.
+	db.Where("user_id = ?", et.UserID).Delete(&UserSession{})
+	db.Delete(&et)
+	c.JSON(http.StatusOK, gin.H{"message": "Password reset successfully"})
 }
