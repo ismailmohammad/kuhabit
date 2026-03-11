@@ -64,6 +64,12 @@ func main() {
 		log.Fatal("Failed to connect to database:", err)
 	}
 
+	if err := db.Exec("CREATE EXTENSION IF NOT EXISTS pgcrypto").Error; err != nil {
+		log.Fatal("Failed to ensure pgcrypto extension:", err)
+	}
+
+	migrateLegacyUserIDSchemaIfNeeded()
+
 	db.AutoMigrate(&User{}, &Habit{}, &HabitLog{}, &PushSubscription{}, &StreakFreeze{})
 	seedInitialStreakFreezes()
 
@@ -198,11 +204,71 @@ func seedInitialStreakFreezes() {
 			continue
 		}
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			log.Printf("freeze seed skipped for user %d: %v", user.ID, err)
+			log.Printf("freeze seed skipped for user %s: %v", user.ID, err)
 			continue
 		}
 		if createErr := db.Create(&StreakFreeze{UserID: user.ID, Count: 3}).Error; createErr != nil {
-			log.Printf("freeze seed create failed for user %d: %v", user.ID, createErr)
+			log.Printf("freeze seed create failed for user %s: %v", user.ID, createErr)
 		}
 	}
+}
+
+func migrateLegacyUserIDSchemaIfNeeded() {
+	if !db.Migrator().HasTable(&User{}) {
+		return
+	}
+
+	isUUID, err := usersIDIsUUID()
+	if err != nil {
+		log.Fatal("Failed to inspect users.id column:", err)
+	}
+	if isUUID {
+		return
+	}
+
+	log.Println("Detected legacy numeric users.id schema.")
+	if hasAnyAppData() {
+		log.Fatal("Cannot auto-migrate users.id to UUID because app tables contain data. Empty app tables first, then restart backend.")
+	}
+
+	log.Println("App tables are empty. Recreating schema for UUID user IDs.")
+	if err := db.Migrator().DropTable(&HabitLog{}, &PushSubscription{}, &StreakFreeze{}, &Habit{}, &User{}); err != nil {
+		log.Fatal("Failed to drop legacy tables:", err)
+	}
+}
+
+func usersIDIsUUID() (bool, error) {
+	type result struct {
+		DataType string `gorm:"column:data_type"`
+	}
+	var r result
+	err := db.Raw(`
+		SELECT data_type
+		FROM information_schema.columns
+		WHERE table_schema = 'public'
+		  AND table_name = 'users'
+		  AND column_name = 'id'
+		LIMIT 1
+	`).Scan(&r).Error
+	if err != nil {
+		return false, err
+	}
+	return r.DataType == "uuid", nil
+}
+
+func hasAnyAppData() bool {
+	tables := []string{"users", "habits", "habit_logs", "push_subscriptions", "streak_freezes"}
+	for _, table := range tables {
+		if !db.Migrator().HasTable(table) {
+			continue
+		}
+		var count int64
+		if err := db.Table(table).Count(&count).Error; err != nil {
+			log.Fatalf("Failed to count rows in %s: %v", table, err)
+		}
+		if count > 0 {
+			return true
+		}
+	}
+	return false
 }

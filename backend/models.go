@@ -3,7 +3,7 @@ package main
 import "time"
 
 type User struct {
-	ID                uint      `gorm:"primaryKey" json:"id"`
+	ID                string    `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
 	CreatedAt         time.Time `json:"-"`
 	Username          string    `gorm:"type:varchar(50);uniqueIndex;not null" json:"username"`
 	Email             *string   `gorm:"type:varchar(255);uniqueIndex" json:"email,omitempty"`
@@ -15,7 +15,7 @@ type User struct {
 type Habit struct {
 	ID            uint       `gorm:"primaryKey" json:"id"`
 	CreatedAt     time.Time  `json:"createdAt"`
-	UserID        uint       `gorm:"not null" json:"-"`
+	UserID        string     `gorm:"type:uuid;not null;index" json:"-"`
 	Name          string     `gorm:"type:varchar(500);not null" json:"name"`
 	Complete      bool       `json:"-"` // deprecated: completion now tracked via HabitLog
 	Recurrence    string     `gorm:"type:varchar(100);not null" json:"recurrence"`
@@ -48,21 +48,21 @@ type HabitLog struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	CreatedAt time.Time `json:"-"`
 	HabitID   uint      `gorm:"not null;uniqueIndex:idx_habit_log" json:"habitId"`
-	UserID    uint      `gorm:"not null;index" json:"-"`
+	UserID    string    `gorm:"type:uuid;not null;index;uniqueIndex:idx_habit_log" json:"-"`
 	LogDate   time.Time `gorm:"type:date;not null;uniqueIndex:idx_habit_log" json:"logDate"`
 	WasFrozen bool      `gorm:"default:false" json:"wasFrozen"`
 }
 
 type PushSubscription struct {
 	ID       uint   `gorm:"primaryKey" json:"-"`
-	UserID   uint   `gorm:"not null;index" json:"-"`
+	UserID   string `gorm:"type:uuid;not null;index" json:"-"`
 	Endpoint string `gorm:"type:text;not null" json:"endpoint"`
 	P256DH   string `gorm:"type:text;not null" json:"p256dh"`
 	Auth     string `gorm:"type:text;not null" json:"auth"`
 }
 
 type StreakFreeze struct {
-	ID     uint `gorm:"primaryKey" json:"-"`
-	UserID uint `gorm:"not null;uniqueIndex" json:"-"`
-	Count  int  `gorm:"default:0" json:"count"`
+	ID     uint   `gorm:"primaryKey" json:"-"`
+	UserID string `gorm:"type:uuid;not null;uniqueIndex" json:"-"`
+	Count  int    `gorm:"default:0" json:"count"`
 }

@@ -142,12 +142,14 @@ const screenGlowPulse = keyframes`
 
 const ScreenGlow = styled.div<{ $color: "green" | "red"; $active: boolean }>`
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
   pointer-events: none;
   z-index: 999;
   opacity: 0;
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
   will-change: opacity;
 
   background:
@@ -166,7 +168,8 @@ const ScreenGlow = styled.div<{ $color: "green" | "red"; $active: boolean }>`
 
   @media (prefers-reduced-motion: reduce) {
     animation: none;
-    opacity: 0;
+    transition: opacity 120ms linear;
+    opacity: ${p => (p.$active ? 0.6 : 0)};
   }
 `;
 

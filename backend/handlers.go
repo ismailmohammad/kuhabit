@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -114,7 +113,7 @@ func parseDateOrToday(dateStr string) (time.Time, error) {
 
 // computeStreak counts consecutive completed (or frozen) scheduled days, ending at referenceDate.
 // If today is a scheduled day but not yet logged, it is skipped without breaking the streak.
-func computeStreak(habit Habit, userID uint, referenceDate time.Time) (streak int, hasFreeze bool) {
+func computeStreak(habit Habit, userID string, referenceDate time.Time) (streak int, hasFreeze bool) {
 	var freeze StreakFreeze
 	db.Where("user_id = ?", userID).First(&freeze)
 	hasFreeze = freeze.Count > 0
@@ -169,7 +168,7 @@ func habitToResponse(h Habit, complete bool, streak int, hasFreeze bool) HabitRe
 }
 
 // awardFreezeIfMilestone grants the user one streak freeze at every 7-day streak milestone.
-func awardFreezeIfMilestone(userID uint, habit Habit, logDate time.Time) {
+func awardFreezeIfMilestone(userID string, habit Habit, logDate time.Time) {
 	streak, _ := computeStreak(habit, userID, logDate)
 	if streak > 0 && streak%7 == 0 {
 		var freeze StreakFreeze
@@ -180,7 +179,7 @@ func awardFreezeIfMilestone(userID uint, habit Habit, logDate time.Time) {
 }
 
 // todayComplete checks whether a non-frozen HabitLog exists for today.
-func todayComplete(habitID, userID uint) bool {
+func todayComplete(habitID uint, userID string) bool {
 	today := time.Now().UTC().Truncate(24 * time.Hour)
 	var count int64
 	db.Model(&HabitLog{}).
@@ -291,7 +290,7 @@ func handleRegister(c *gin.Context) {
 	db.Create(&StreakFreeze{UserID: user.ID, Count: 3})
 
 	session := sessions.Default(c)
-	session.Set("userID", fmt.Sprintf("%d", user.ID))
+	session.Set("userID", user.ID)
 	session.Save()
 
 	showWelcome := isWelcomePending(&user)
@@ -330,7 +329,7 @@ func handleLogin(c *gin.Context) {
 	}
 
 	session := sessions.Default(c)
-	session.Set("userID", fmt.Sprintf("%d", user.ID))
+	session.Set("userID", user.ID)
 	session.Save()
 
 	showWelcome := isWelcomePending(&user)
@@ -395,15 +394,15 @@ func requireAuth(c *gin.Context) {
 		return
 	}
 
-	id, err := strconv.ParseUint(raw.(string), 10, 64)
-	if err != nil {
+	userID, ok := raw.(string)
+	if !ok || userID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid session"})
 		c.Abort()
 		return
 	}
 
 	var user User
-	if result := db.First(&user, id); result.Error != nil {
+	if result := db.First(&user, "id = ?", userID); result.Error != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
 		c.Abort()
 		return

@@ -14,7 +14,7 @@ export interface HabitType {
 }
 
 export interface UserInfo {
-    id: number;
+    id: string;
     username: string;
     email?: string;
     showWelcome?: boolean;

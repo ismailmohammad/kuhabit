@@ -57,12 +57,14 @@ const emberRise5 = keyframes`
 
 export const ScreenGlow = styled.div<{ $color: 'green' | 'red'; $active: boolean }>`
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
   pointer-events: none;
   z-index: 999;
   opacity: 0;
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
   will-change: opacity;
   background: radial-gradient(circle at center,
     rgba(0,0,0,0) 58%,
@@ -70,7 +72,11 @@ export const ScreenGlow = styled.div<{ $color: 'green' | 'red'; $active: boolean
       ? 'rgba(45,202,142,0.12) 78%, rgba(45,202,142,0.22) 100%'
       : 'rgba(255,90,60,0.12) 78%, rgba(255,90,60,0.22) 100%'});
   ${p => p.$active && css`animation: ${screenGlowPulse} 700ms ease-out forwards;`}
-  @media (prefers-reduced-motion: reduce) { animation: none; opacity: 0; }
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+    transition: opacity 120ms linear;
+    opacity: ${p => (p.$active ? 0.6 : 0)};
+  }
 `;
 
 export const EmberBurst = styled.div`
