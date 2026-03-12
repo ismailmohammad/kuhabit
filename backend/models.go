@@ -11,13 +11,16 @@ type User struct {
 	Password          string    `gorm:"type:varchar(255);not null" json:"-"`
 	WelcomeSeen       bool      `gorm:"default:false" json:"-"`
 	DailySparkEnabled bool      `gorm:"default:true" json:"-"`
+	E2EEEnabled       bool      `gorm:"default:false" json:"e2eeEnabled"`
+	E2EESalt          string    `gorm:"type:varchar(64);default:''" json:"-"`
+	E2EEVerifier      string    `gorm:"type:varchar(512);default:''" json:"-"`
 }
 
 type Habit struct {
 	ID            uint       `gorm:"primaryKey" json:"id"`
 	CreatedAt     time.Time  `json:"createdAt"`
 	UserID        string     `gorm:"type:uuid;not null;index" json:"-"`
-	Name          string     `gorm:"type:varchar(500);not null" json:"name"`
+	Name          string     `gorm:"type:text;not null" json:"name"`
 	Complete      bool       `json:"-"` // deprecated: completion now tracked via HabitLog
 	Recurrence    string     `gorm:"type:varchar(100);not null" json:"recurrence"`
 	PositiveType  bool       `json:"positiveType"`

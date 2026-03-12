@@ -11,6 +11,9 @@ import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { setUserInfo } from "../../redux/userSlice";
 import type { RootState } from "../../redux/store";
+import { useE2EE } from "../../context/E2EEContext";
+import { decrypt, isEncrypted } from "../../utils/e2ee";
+import VaultUnlockModal from "../VaultUnlockModal";
 
 import CubeRed from '../../assets/cube-logo-red.png';
 import CubeRedTop from '../../assets/cube-logo-red-top.png';
@@ -649,6 +652,7 @@ export default function Dashboard() {
     const navigate = useNavigate();
     const dispatch = useDispatch();
     const userInfo = useSelector((state: RootState) => state.user.userInfo);
+    const { key: e2eeKey, isUnlocked } = useE2EE();
     const achievementSeenKey = userInfo?.id
         ? `${ACHIEVEMENT_SEEN_KEY_PREFIX}_${userInfo.id}`
         : null;
@@ -667,6 +671,14 @@ export default function Dashboard() {
         return logoMap.get(habit.id)!;
     }
 
+    async function decryptHabits(raw: HabitType[], key: CryptoKey): Promise<HabitType[]> {
+        return Promise.all(raw.map(async h => ({
+            ...h,
+            name: isEncrypted(h.name) ? await decrypt(key, h.name) : h.name,
+            notes: isEncrypted(h.notes) ? await decrypt(key, h.notes) : h.notes,
+        })));
+    }
+
     useEffect(() => {
         let cancelled = false;
         async function load() {
@@ -682,8 +694,9 @@ export default function Dashboard() {
                     api.habits.list(listView, date),
                     api.habits.getAchievements(),
                 ]);
+                const decrypted = e2eeKey ? await decryptHabits(data, e2eeKey) : data;
                 if (!cancelled) {
-                    setHabits(data);
+                    setHabits(decrypted);
                     setAchievements(achievementData);
                     setContentKey(k => k + 1);
                 }
@@ -695,7 +708,8 @@ export default function Dashboard() {
         }
         load();
         return () => { cancelled = true; };
-    }, [view, calendarDate, dispatch, navigate, userInfo]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [view, calendarDate, dispatch, navigate, userInfo, isUnlocked]);
 
     const effectiveDate = view === 'calendar' ? calendarDate : undefined;
 
@@ -1051,6 +1065,7 @@ export default function Dashboard() {
 
     return (
         <>
+            {userInfo?.e2eeEnabled && !isUnlocked && <VaultUnlockModal />}
             <Page>
                 <PageHeader>
                     <PageTitle>

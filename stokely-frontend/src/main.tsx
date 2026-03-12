@@ -14,6 +14,7 @@ import ForgotPasswordPage from './components/UserActionPages/ForgotPasswordPage.
 import ResetPasswordPage from './components/UserActionPages/ResetPasswordPage.tsx'
 import VerifyEmailPage from './components/UserActionPages/VerifyEmailPage.tsx'
 import { Toaster } from 'react-hot-toast'
+import { E2EEProvider } from './context/E2EEContext.tsx'
 
 const router = createBrowserRouter([
   {
@@ -34,14 +35,16 @@ const router = createBrowserRouter([
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <Provider store={store}>
-    <React.StrictMode>
-      <Toaster
-        position="bottom-left"
-        toastOptions={{
-          style: { background: '#1e1e1e', color: '#fff', border: '1px solid #333' },
-        }}
-      />
-      <RouterProvider router={router} />
-    </React.StrictMode>
+    <E2EEProvider>
+      <React.StrictMode>
+        <Toaster
+          position="bottom-left"
+          toastOptions={{
+            style: { background: '#1e1e1e', color: '#fff', border: '1px solid #333' },
+          }}
+        />
+        <RouterProvider router={router} />
+      </React.StrictMode>
+    </E2EEProvider>
   </Provider>,
 )

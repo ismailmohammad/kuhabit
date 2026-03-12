@@ -63,3 +63,90 @@ button {
     from { opacity: 0; transform: translateY(8px); }
     to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ── Vault Unlock Modal ─────────────────────────────────────────────────────── */
+
+.vault-unlock-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 300;
+    padding: 1rem;
+}
+
+.vault-unlock-box {
+    background: #1e1e1e;
+    border: 1px solid #444;
+    border-radius: 16px;
+    padding: 2rem;
+    width: 100%;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.vault-unlock-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #fff;
+    margin: 0;
+}
+
+.vault-unlock-desc {
+    font-size: 0.875rem;
+    color: #aaa;
+    margin: 0;
+}
+
+.vault-unlock-input {
+    width: 100%;
+    padding: 0.625rem 0.75rem;
+    background: #2a2a2a;
+    border: 1px solid #444;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 0.9rem;
+    font-family: inherit;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.vault-unlock-input:focus {
+    border-color: #2dca8e;
+}
+
+.vault-unlock-btn {
+    width: 100%;
+    padding: 0.65rem 1rem;
+    background: #2dca8e;
+    color: #121212;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.vault-unlock-btn:disabled {
+    background: #333;
+    color: #666;
+    cursor: not-allowed;
+}
+
+.vault-unlock-error {
+    color: #f06a6a;
+    font-size: 0.8rem;
+    margin: 0;
+}
+
+.vault-unlock-hint {
+    color: #777;
+    font-size: 0.75rem;
+    margin: 0;
+    text-align: center;
+}

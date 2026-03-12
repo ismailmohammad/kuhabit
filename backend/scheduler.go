@@ -60,10 +60,14 @@ func runReminderCheck(now time.Time) {
 			continue
 		}
 
+		habitName := h.Name
+		if strings.HasPrefix(habitName, "e2ee:v1:") {
+			habitName = "your habit"
+		}
 		var subs []PushSubscription
 		db.Where("user_id = ? AND enabled = true", h.UserID).Find(&subs)
 		for _, sub := range subs {
-			if _, err := sendPushAndRecord(sub, "Habit Reminder", fmt.Sprintf("Time to: %s", h.Name)); err != nil {
+			if _, err := sendPushAndRecord(sub, "Habit Reminder", fmt.Sprintf("Time to: %s", habitName)); err != nil {
 				log.Printf("Push failed for sub %d: %v", sub.ID, err)
 			}
 		}

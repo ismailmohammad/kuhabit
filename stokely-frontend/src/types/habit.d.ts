@@ -22,6 +22,7 @@ export interface UserInfo {
     emailPending?: boolean;
     showWelcome?: boolean;
     dailySparkEnabled?: boolean;
+    e2eeEnabled?: boolean;
 }
 
 export type DashboardView = 'daily' | 'all' | 'calendar' | 'streak' | 'achievements';

@@ -106,4 +106,13 @@ export const api = {
         deleteAccount: (password: string) =>
             req<void>('/user/account', { method: 'DELETE', body: JSON.stringify({ password }) }),
     },
+    e2ee: {
+        status: () => req<{ enabled: boolean; salt?: string; verifier?: string }>('/e2ee'),
+        enable: (data: { salt: string; verifier: string; habits: Array<{ id: number; name: string; notes: string }> }) =>
+            req<void>('/e2ee/enable', { method: 'POST', body: JSON.stringify(data) }),
+        changePassphrase: (data: { salt: string; verifier: string; habits: Array<{ id: number; name: string; notes: string }> }) =>
+            req<void>('/e2ee/passphrase', { method: 'PUT', body: JSON.stringify(data) }),
+        disable: (habits: Array<{ id: number; name: string; notes: string }>) =>
+            req<void>('/e2ee/disable', { method: 'POST', body: JSON.stringify({ habits }) }),
+    },
 };

@@ -522,6 +522,7 @@ func handleMe(c *gin.Context) {
 		"emailVerified":     user.EmailVerified,
 		"showWelcome":       showWelcome,
 		"dailySparkEnabled": user.DailySparkEnabled,
+		"e2eeEnabled":       user.E2EEEnabled,
 	})
 }
 
@@ -1133,6 +1134,107 @@ func handleDeleteAccount(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Account deleted"})
+}
+
+// ── E2EE ──────────────────────────────────────────────────────────────────────
+
+func handleE2EEStatus(c *gin.Context) {
+	user := c.MustGet("user").(User)
+	if !user.E2EEEnabled {
+		c.JSON(http.StatusOK, gin.H{"enabled": false})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"enabled":  true,
+		"salt":     user.E2EESalt,
+		"verifier": user.E2EEVerifier,
+	})
+}
+
+type e2eeHabitUpdate struct {
+	ID    uint   `json:"id"`
+	Name  string `json:"name"`
+	Notes string `json:"notes"`
+}
+
+func handleE2EEEnable(c *gin.Context) {
+	user := c.MustGet("user").(User)
+	var input struct {
+		Salt     string            `json:"salt" binding:"required"`
+		Verifier string            `json:"verifier" binding:"required"`
+		Habits   []e2eeHabitUpdate `json:"habits"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := e2eeBulkUpdateHabits(user.ID, input.Habits); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	db.Model(&user).Updates(map[string]any{
+		"e2ee_enabled":  true,
+		"e2ee_salt":     input.Salt,
+		"e2ee_verifier": input.Verifier,
+	})
+	c.JSON(http.StatusOK, gin.H{"message": "E2EE enabled"})
+}
+
+func handleE2EEChangePassphrase(c *gin.Context) {
+	user := c.MustGet("user").(User)
+	var input struct {
+		Salt     string            `json:"salt" binding:"required"`
+		Verifier string            `json:"verifier" binding:"required"`
+		Habits   []e2eeHabitUpdate `json:"habits"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := e2eeBulkUpdateHabits(user.ID, input.Habits); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	db.Model(&user).Updates(map[string]any{
+		"e2ee_salt":     input.Salt,
+		"e2ee_verifier": input.Verifier,
+	})
+	c.JSON(http.StatusOK, gin.H{"message": "Passphrase updated"})
+}
+
+func handleE2EEDisable(c *gin.Context) {
+	user := c.MustGet("user").(User)
+	var input struct {
+		Habits []e2eeHabitUpdate `json:"habits"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := e2eeBulkUpdateHabits(user.ID, input.Habits); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	db.Model(&user).Updates(map[string]any{
+		"e2ee_enabled":  false,
+		"e2ee_salt":     "",
+		"e2ee_verifier": "",
+	})
+	c.JSON(http.StatusOK, gin.H{"message": "E2EE disabled"})
+}
+
+func e2eeBulkUpdateHabits(userID string, updates []e2eeHabitUpdate) error {
+	for _, u := range updates {
+		var habit Habit
+		if err := db.Where("id = ? AND user_id = ?", u.ID, userID).First(&habit).Error; err != nil {
+			return fmt.Errorf("habit %d not found or not owned by user", u.ID)
+		}
+		db.Model(&habit).Updates(map[string]any{
+			"name":  u.Name,
+			"notes": u.Notes,
+		})
+	}
+	return nil
 }
 
 // ── Push Notifications ────────────────────────────────────────────────────────

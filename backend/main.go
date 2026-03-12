@@ -172,6 +172,15 @@ func main() {
 			user.DELETE("/account", requireCSRF, handleDeleteAccount)
 		}
 
+		e2ee := api.Group("/e2ee")
+		e2ee.Use(requireAuth)
+		{
+			e2ee.GET("", handleE2EEStatus)
+			e2ee.POST("/enable", requireCSRF, handleE2EEEnable)
+			e2ee.PUT("/passphrase", requireCSRF, handleE2EEChangePassphrase)
+			e2ee.POST("/disable", requireCSRF, handleE2EEDisable)
+		}
+
 		sessionsGroup := api.Group("/sessions")
 		sessionsGroup.Use(requireAuth)
 		{

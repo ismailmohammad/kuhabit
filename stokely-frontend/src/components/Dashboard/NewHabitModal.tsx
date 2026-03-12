@@ -4,6 +4,10 @@ import './NewHabitModal.css';
 import { HabitType } from "../../types/habit";
 import { HABIT_ICONS } from "../../utils/habitIcons";
 import { syncPushSubscriptionOnDevice } from "../../utils/pushNotifications";
+import { useSelector } from "react-redux";
+import type { RootState } from "../../redux/store";
+import { useE2EE } from "../../context/E2EEContext";
+import { encrypt } from "../../utils/e2ee";
 
 import CurbCube from '../../assets/cube-logo-red.png';
 import BuildCube from '../../assets/cube-logo-green.png';
@@ -124,6 +128,8 @@ function IconPicker({ selected, onSelect }: { selected: string; onSelect: (name:
 
 const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToEdit }: HabitModalProps) => {
     const isEdit = habitToEdit !== null;
+    const userInfo = useSelector((state: RootState) => state.user.userInfo);
+    const { key: e2eeKey, isUnlocked } = useE2EE();
 
     // Animation state
     const [mounted, setMounted] = useState(false);
@@ -245,17 +251,24 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
             }
         }
 
+        let submitName = name;
+        let submitNotes = notes;
+        if (userInfo?.e2eeEnabled && isUnlocked && e2eeKey) {
+            submitName = await encrypt(e2eeKey, name);
+            submitNotes = notes ? await encrypt(e2eeKey, notes) : notes;
+        }
+
         if (isEdit && habitToEdit) {
             onUpdate(habitToEdit.id, {
-                name, recurrence, positiveType,
-                icon, notes,
+                name: submitName, recurrence, positiveType,
+                icon, notes: submitNotes,
                 reminderTime: utcReminder,
                 recurrenceEnd: endDate,
             });
         } else {
             onCreate({
-                name, recurrence, positiveType,
-                icon, notes,
+                name: submitName, recurrence, positiveType,
+                icon, notes: submitNotes,
                 reminderTime: utcReminder,
                 recurrenceEnd: endDate,
             });
@@ -433,7 +446,12 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
                         </>
                     )}
 
-                    <button className="modal-submit" type="submit">
+                    <button
+                        className="modal-submit"
+                        type="submit"
+                        disabled={userInfo?.e2eeEnabled === true && !isUnlocked}
+                        title={userInfo?.e2eeEnabled && !isUnlocked ? 'Unlock vault first' : undefined}
+                    >
                         {isEdit ? 'Save Changes' : 'Add Habit'}
                     </button>
 
@@ -540,15 +558,21 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
                         </div>
                     )}
 
-                    {/* E2E Encryption placeholder */}
-                    <div className="e2e-placeholder">
-                        <div className="e2e-divider" />
-                        <p className="e2e-label">End-to-End Encryption <span className="e2e-soon">Coming Soon</span></p>
-                        <p className="e2e-desc">Your notes and habit names will be encrypted client-side before leaving your device.</p>
-                        <button type="button" disabled className="modal-submit modal-submit--disabled">
-                            Enable Encryption
-                        </button>
-                    </div>
+                    {/* E2EE status */}
+                    {userInfo?.e2eeEnabled && (
+                        <div className="e2e-placeholder">
+                            <div className="e2e-divider" />
+                            {isUnlocked ? (
+                                <p className="e2e-label">
+                                    🔐 <span style={{ color: '#2dca8e' }}>E2EE Active</span> — habit name and notes are encrypted
+                                </p>
+                            ) : (
+                                <p className="e2e-label" style={{ color: '#f0a66a' }}>
+                                    🔒 Vault locked — unlock vault to save encrypted
+                                </p>
+                            )}
+                        </div>
+                    )}
                 </form>
             </div>
         </div>
