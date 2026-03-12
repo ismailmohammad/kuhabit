@@ -8,6 +8,7 @@ import { useSelector } from "react-redux";
 import type { RootState } from "../../redux/store";
 import { useE2EE } from "../../context/E2EEContext";
 import { encrypt } from "../../utils/e2ee";
+import SettingsModal from "../SettingsModal";
 
 import CurbCube from '../../assets/cube-logo-red.png';
 import BuildCube from '../../assets/cube-logo-green.png';
@@ -149,6 +150,10 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
     const [notes, setNotes] = useState('');
     const [reminderTime, setReminderTime] = useState('');
 
+    // Per-habit encryption toggle
+    const [encryptHabit, setEncryptHabit] = useState(false);
+    const [showE2EESettings, setShowE2EESettings] = useState(false);
+
     // Danger zone confirm state
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [deleteAck, setDeleteAck] = useState(false);
@@ -172,6 +177,7 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
 
     useEffect(() => {
         if (habitToEdit) {
+            setEncryptHabit(habitToEdit.encrypted ?? false);
             setName(habitToEdit.name);
             setPositiveType(habitToEdit.positiveType);
             const p = detectPreset(habitToEdit.recurrence);
@@ -198,6 +204,7 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
             setReminderTime('');
             setUseEndDate(false);
             setRecurrenceEnd('');
+            setEncryptHabit(false);
         }
         setShowDeleteConfirm(false);
         setDeleteAck(false);
@@ -253,7 +260,7 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
 
         let submitName = name;
         let submitNotes = notes;
-        if (userInfo?.e2eeEnabled && isUnlocked && e2eeKey) {
+        if (encryptHabit && isUnlocked && e2eeKey) {
             submitName = await encrypt(e2eeKey, name);
             submitNotes = notes ? await encrypt(e2eeKey, notes) : notes;
         }
@@ -289,6 +296,7 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
     const SelectedIcon = icon ? HABIT_ICONS[icon] : null;
 
     return (
+        <>
         <div className={`modal-overlay${closing ? ' modal-overlay--out' : ''}`} onClick={handleClose}>
             <div className={`modal-box${closing ? ' modal-box--out' : ''}`} onClick={e => e.stopPropagation()}>
                 <div className="modal-header">
@@ -449,8 +457,6 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
                     <button
                         className="modal-submit"
                         type="submit"
-                        disabled={userInfo?.e2eeEnabled === true && !isUnlocked}
-                        title={userInfo?.e2eeEnabled && !isUnlocked ? 'Unlock vault first' : undefined}
                     >
                         {isEdit ? 'Save Changes' : 'Add Habit'}
                     </button>
@@ -558,24 +564,47 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
                         </div>
                     )}
 
-                    {/* E2EE status */}
-                    {userInfo?.e2eeEnabled && (
-                        <div className="e2e-placeholder">
-                            <div className="e2e-divider" />
-                            {isUnlocked ? (
-                                <p className="e2e-label">
-                                    🔐 <span style={{ color: '#2dca8e' }}>E2EE Active</span> — habit name and notes are encrypted
+                    {/* E2EE section — always shown at the bottom */}
+                    <div className="e2e-placeholder">
+                        <div className="e2e-divider" />
+                        {!userInfo?.e2eeEnabled ? (
+                            <>
+                                <p className="e2e-label" style={{ color: '#888', margin: 0 }}>
+                                    🔐 End-to-End Encryption
                                 </p>
-                            ) : (
-                                <p className="e2e-label" style={{ color: '#f0a66a' }}>
-                                    🔒 Vault locked — unlock vault to save encrypted
+                                <p style={{ fontSize: '0.8rem', color: '#666', margin: '0.25rem 0 0.5rem' }}>
+                                    Encrypt individual habit names and notes so the server never sees your data in plaintext.
                                 </p>
-                            )}
-                        </div>
-                    )}
+                                <button
+                                    type="button"
+                                    className="e2e-setup-btn"
+                                    onClick={() => setShowE2EESettings(true)}
+                                >
+                                    Set up in Settings →
+                                </button>
+                            </>
+                        ) : isUnlocked ? (
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem', color: '#ccc' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={encryptHabit}
+                                    onChange={e => setEncryptHabit(e.target.checked)}
+                                />
+                                🔐 Encrypt this habit's name and notes on save
+                            </label>
+                        ) : (
+                            <p className="e2e-label" style={{ color: '#f0a66a', margin: 0 }}>
+                                🔒 Vault locked — unlock vault in the header to enable encryption
+                            </p>
+                        )}
+                    </div>
+
                 </form>
             </div>
         </div>
+
+        {showE2EESettings && <SettingsModal onClose={() => setShowE2EESettings(false)} initialSection="e2ee" />}
+        </>
     );
 };
 

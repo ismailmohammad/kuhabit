@@ -76,6 +76,10 @@ func main() {
 	enforceUUIDUserIDSchema()
 
 	db.AutoMigrate(&User{}, &Habit{}, &HabitLog{}, &PushSubscription{}, &StreakFreeze{}, &UserSession{}, &EmailToken{})
+	// Safety net: ensure E2EE columns exist even if AutoMigrate missed them on existing tables.
+	db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS e2ee_enabled boolean NOT NULL DEFAULT false`)
+	db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS e2ee_salt varchar(64) NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS e2ee_verifier varchar(512) NOT NULL DEFAULT ''`)
 	// Trust emails that existed before the verification system was added.
 	db.Exec("UPDATE users SET email_verified = true WHERE email IS NOT NULL AND email_verified = false")
 	seedInitialStreakFreezes()

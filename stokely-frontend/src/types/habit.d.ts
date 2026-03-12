@@ -12,6 +12,7 @@ export interface HabitType {
     hasFreeze: boolean;
     frozenToday: boolean;
     createdAt: string;
+    encrypted?: boolean;      // client-side: true when the habit's name/notes are/were E2EE-encrypted
 }
 
 export interface UserInfo {

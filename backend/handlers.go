@@ -1172,11 +1172,19 @@ func handleE2EEEnable(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	db.Model(&user).Updates(map[string]any{
+	res := db.Model(&user).UpdateColumns(map[string]any{
 		"e2ee_enabled":  true,
 		"e2ee_salt":     input.Salt,
 		"e2ee_verifier": input.Verifier,
 	})
+	if res.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save E2EE settings: " + res.Error.Error()})
+		return
+	}
+	if res.RowsAffected == 0 {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "E2EE enable matched no rows"})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "E2EE enabled"})
 }
 
@@ -1195,10 +1203,18 @@ func handleE2EEChangePassphrase(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	db.Model(&user).Updates(map[string]any{
+	res := db.Model(&user).UpdateColumns(map[string]any{
 		"e2ee_salt":     input.Salt,
 		"e2ee_verifier": input.Verifier,
 	})
+	if res.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update passphrase: " + res.Error.Error()})
+		return
+	}
+	if res.RowsAffected == 0 {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Passphrase update matched no rows"})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "Passphrase updated"})
 }
 
@@ -1215,11 +1231,13 @@ func handleE2EEDisable(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	db.Model(&user).Updates(map[string]any{
-		"e2ee_enabled":  false,
-		"e2ee_salt":     "",
-		"e2ee_verifier": "",
-	})
+	if err := db.Exec(
+		"UPDATE users SET e2ee_enabled = false, e2ee_salt = '', e2ee_verifier = '' WHERE id = ?",
+		user.ID,
+	).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to disable E2EE"})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "E2EE disabled"})
 }
 

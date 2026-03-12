@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -11,9 +11,9 @@ import { useE2EE } from '../context/E2EEContext';
 import { generateSalt, deriveKey, makeVerifier, checkVerifier, encrypt, decrypt, isEncrypted } from '../utils/e2ee';
 import './SettingsModal.css';
 
-type Props = { onClose: () => void };
+type Props = { onClose: () => void; initialSection?: 'e2ee' };
 
-export default function SettingsModal({ onClose }: Props) {
+export default function SettingsModal({ onClose, initialSection }: Props) {
     const dispatch = useDispatch();
     const navigate = useNavigate();
     const userInfo = useSelector((state: RootState) => state.user.userInfo);
@@ -81,6 +81,7 @@ export default function SettingsModal({ onClose }: Props) {
     const [subscriptions, setSubscriptions] = useState<PushSubscriptionDevice[]>([]);
 
     // E2EE
+    const e2eeSectionRef = useRef<HTMLElement>(null);
     const { key: e2eeKey, isUnlocked, unlock: e2eeUnlock, lock: e2eeLock } = useE2EE();
     const [e2eePassphrase, setE2EEPassphrase] = useState('');
     const [e2eeConfirm, setE2EEConfirm] = useState('');
@@ -92,6 +93,12 @@ export default function SettingsModal({ onClose }: Props) {
     const [e2eeNewConfirm, setE2EENewConfirm] = useState('');
     const [e2eeDisableStep, setE2EEDisableStep] = useState(false);
     const [e2eeUnlockPass, setE2EEUnlockPass] = useState('');
+
+    useEffect(() => {
+        if (initialSection === 'e2ee' && e2eeSectionRef.current) {
+            e2eeSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }, [initialSection]);
 
     const loadSubscriptions = async () => {
         setPushLoading(true);
@@ -263,17 +270,13 @@ export default function SettingsModal({ onClose }: Props) {
             const salt = generateSalt();
             const key = await deriveKey(e2eePassphrase, salt);
             const verifier = await makeVerifier(key);
-            const habits = await api.habits.list('all');
-            const encryptedHabits = await Promise.all(habits.map(async h => ({
-                id: h.id,
-                name: await encrypt(key, h.name),
-                notes: h.notes ? await encrypt(key, h.notes) : '',
-            })));
-            await api.e2ee.enable({ salt, verifier, habits: encryptedHabits });
+            // No bulk encryption — users choose per habit. Just store vault credentials.
+            await api.e2ee.enable({ salt, verifier, habits: [] });
             await e2eeUnlock(key);
+            // Server returned 200 — update Redux directly (no re-fetch needed).
             dispatch(setUserInfo({ ...userInfo, e2eeEnabled: true }));
             setE2EEPassphrase(''); setE2EEConfirm(''); setE2EEShowEnable(false);
-            toast.success('End-to-end encryption enabled');
+            toast.success('Vault set up — encrypt individual habits from the habit editor');
         } catch (err: unknown) {
             toast.error(err instanceof Error ? err.message : 'Failed to enable E2EE');
         } finally {
@@ -286,7 +289,8 @@ export default function SettingsModal({ onClose }: Props) {
         setE2EELoading(true);
         try {
             const status = await api.e2ee.status();
-            if (!status.salt || !status.verifier) { toast.error('E2EE data missing'); return; }
+            if (!status.enabled) { toast.error('E2EE vault is not configured'); return; }
+            if (!status.salt || !status.verifier) { toast.error('Vault data incomplete — please re-enable E2EE'); return; }
             const key = await deriveKey(e2eeUnlockPass, status.salt);
             const ok = await checkVerifier(key, status.verifier);
             if (!ok) { toast.error('Incorrect passphrase'); return; }
@@ -307,18 +311,20 @@ export default function SettingsModal({ onClose }: Props) {
         setE2EELoading(true);
         try {
             const status = await api.e2ee.status();
-            if (!status.salt || !status.verifier) { toast.error('E2EE data missing'); return; }
+            if (!status.salt || !status.verifier) { toast.error('Vault data incomplete'); return; }
             const currentKey = await deriveKey(e2eeCurrentPass, status.salt);
             const valid = await checkVerifier(currentKey, status.verifier);
             if (!valid) { toast.error('Current passphrase is incorrect'); return; }
             const newSalt = generateSalt();
             const newKey = await deriveKey(e2eeNewPass, newSalt);
             const newVerifier = await makeVerifier(newKey);
+            // Only re-encrypt habits that are currently encrypted
             const habits = await api.habits.list('all');
-            const reencryptedHabits = await Promise.all(habits.map(async h => ({
+            const encryptedHabits = habits.filter(h => isEncrypted(h.name));
+            const reencryptedHabits = await Promise.all(encryptedHabits.map(async h => ({
                 id: h.id,
-                name: isEncrypted(h.name) ? await encrypt(newKey, await decrypt(e2eeKey, h.name)) : await encrypt(newKey, h.name),
-                notes: isEncrypted(h.notes) ? await encrypt(newKey, await decrypt(e2eeKey, h.notes)) : (h.notes ? await encrypt(newKey, h.notes) : ''),
+                name: await encrypt(newKey, await decrypt(e2eeKey, h.name)),
+                notes: isEncrypted(h.notes) ? await encrypt(newKey, await decrypt(e2eeKey, h.notes)) : h.notes,
             })));
             await api.e2ee.changePassphrase({ salt: newSalt, verifier: newVerifier, habits: reencryptedHabits });
             await e2eeUnlock(newKey);
@@ -335,10 +341,12 @@ export default function SettingsModal({ onClose }: Props) {
         if (!userInfo || !e2eeKey) return;
         setE2EELoading(true);
         try {
+            // Only send back habits that are actually encrypted
             const habits = await api.habits.list('all');
-            const decryptedHabits = await Promise.all(habits.map(async h => ({
+            const encryptedHabits = habits.filter(h => isEncrypted(h.name));
+            const decryptedHabits = await Promise.all(encryptedHabits.map(async h => ({
                 id: h.id,
-                name: isEncrypted(h.name) ? await decrypt(e2eeKey, h.name) : h.name,
+                name: await decrypt(e2eeKey, h.name),
                 notes: isEncrypted(h.notes) ? await decrypt(e2eeKey, h.notes) : h.notes,
             })));
             await api.e2ee.disable(decryptedHabits);
@@ -503,7 +511,7 @@ export default function SettingsModal({ onClose }: Props) {
                 </section>
 
                 {/* End-to-End Encryption */}
-                <section className="settings-section">
+                <section className="settings-section" ref={e2eeSectionRef}>
                     <h3 className="settings-section-title">End-to-End Encryption</h3>
                     {!userInfo?.e2eeEnabled ? (
                         <>

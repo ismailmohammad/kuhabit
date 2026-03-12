@@ -653,6 +653,9 @@ export default function Dashboard() {
     const dispatch = useDispatch();
     const userInfo = useSelector((state: RootState) => state.user.userInfo);
     const { key: e2eeKey, isUnlocked } = useE2EE();
+    const [vaultModalOpen, setVaultModalOpen] = useState(true);
+    // Re-show modal whenever the vault becomes locked
+    useEffect(() => { if (!isUnlocked) setVaultModalOpen(true); }, [isUnlocked]);
     const achievementSeenKey = userInfo?.id
         ? `${ACHIEVEMENT_SEEN_KEY_PREFIX}_${userInfo.id}`
         : null;
@@ -674,9 +677,19 @@ export default function Dashboard() {
     async function decryptHabits(raw: HabitType[], key: CryptoKey): Promise<HabitType[]> {
         return Promise.all(raw.map(async h => ({
             ...h,
+            encrypted: isEncrypted(h.name),
             name: isEncrypted(h.name) ? await decrypt(key, h.name) : h.name,
             notes: isEncrypted(h.notes) ? await decrypt(key, h.notes) : h.notes,
         })));
+    }
+
+    function maskLockedHabits(raw: HabitType[]): HabitType[] {
+        return raw.map(h => ({
+            ...h,
+            encrypted: isEncrypted(h.name),
+            name: isEncrypted(h.name) ? '🔒 Encrypted' : h.name,
+            notes: isEncrypted(h.notes) ? '' : h.notes,
+        }));
     }
 
     useEffect(() => {
@@ -694,9 +707,11 @@ export default function Dashboard() {
                     api.habits.list(listView, date),
                     api.habits.getAchievements(),
                 ]);
-                const decrypted = e2eeKey ? await decryptHabits(data, e2eeKey) : data;
+                const processed = e2eeKey
+                    ? await decryptHabits(data, e2eeKey)
+                    : maskLockedHabits(data);
                 if (!cancelled) {
-                    setHabits(decrypted);
+                    setHabits(processed);
                     setAchievements(achievementData);
                     setContentKey(k => k + 1);
                 }
@@ -926,9 +941,11 @@ export default function Dashboard() {
                 api.habits.list(listView, date),
                 api.habits.getAchievements(),
             ]);
-            setHabits(data);
+            const processed = e2eeKey ? await decryptHabits(data, e2eeKey) : maskLockedHabits(data);
+            setHabits(processed);
             setAchievements(achievementData);
-            toast.success(next ? `✓ "${habit.name}" complete` : `↩ "${habit.name}" reset`);
+            const displayName = habit.encrypted ? 'habit' : `"${habit.name}"`;
+            toast.success(next ? `✓ ${displayName} complete` : `↩ ${displayName} reset`);
         } catch (err: unknown) {
             setHabits(prev => prev.map(h => h.id === habit.id ? habit : h));
             toast.error(err instanceof Error ? err.message : "Update failed");
@@ -969,7 +986,8 @@ export default function Dashboard() {
         setHabits(prev => prev.filter(h => h.id !== id));
         try {
             await api.habits.remove(id);
-            toast.success(`"${habit?.name}" ended`);
+            const displayName = habit?.encrypted ? 'Habit' : `"${habit?.name}"`;
+            toast.success(`${displayName} ended`);
         } catch (err: unknown) {
             if (habit) setHabits(prev => [...prev, habit].sort((a, b) => a.id - b.id));
             toast.error(err instanceof Error ? err.message : "Delete failed");
@@ -982,8 +1000,15 @@ export default function Dashboard() {
     }) => {
         try {
             const newHabit = await api.habits.create(data);
-            setHabits(prev => [...prev, newHabit]);
-            toast.success(`"${newHabit.name}" added`);
+            // Decrypt the new habit name for display if vault is unlocked
+            const displayName = e2eeKey && isEncrypted(newHabit.name)
+                ? await decrypt(e2eeKey, newHabit.name)
+                : newHabit.name;
+            const processed = e2eeKey
+                ? await decryptHabits([newHabit], e2eeKey)
+                : maskLockedHabits([newHabit]);
+            setHabits(prev => [...prev, processed[0]]);
+            toast.success(`"${displayName}" added`);
         } catch (err: unknown) {
             toast.error(err instanceof Error ? err.message : "Failed to create habit");
         }
@@ -992,7 +1017,10 @@ export default function Dashboard() {
     const handleUpdate = async (id: number, changes: Record<string, unknown>) => {
         try {
             const updated = await api.habits.update(id, changes);
-            setHabits(prev => prev.map(h => h.id === id ? updated : h));
+            const processed = e2eeKey
+                ? await decryptHabits([updated], e2eeKey)
+                : maskLockedHabits([updated]);
+            setHabits(prev => prev.map(h => h.id === id ? processed[0] : h));
             toast.success("Habit updated");
         } catch (err: unknown) {
             toast.error(err instanceof Error ? err.message : "Update failed");
@@ -1000,6 +1028,10 @@ export default function Dashboard() {
     };
 
     const openEdit = (habit: HabitType) => {
+        if (habit.encrypted && !isUnlocked) {
+            toast.error('Unlock vault to edit this encrypted habit');
+            return;
+        }
         setHabitToEdit(habit);
         setModalOpen(true);
     };
@@ -1065,7 +1097,9 @@ export default function Dashboard() {
 
     return (
         <>
-            {userInfo?.e2eeEnabled && !isUnlocked && <VaultUnlockModal />}
+            {userInfo?.e2eeEnabled && !isUnlocked && vaultModalOpen && (
+                <VaultUnlockModal onClose={() => setVaultModalOpen(false)} />
+            )}
             <Page>
                 <PageHeader>
                     <PageTitle>

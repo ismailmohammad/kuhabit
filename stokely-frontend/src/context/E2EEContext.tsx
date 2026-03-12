@@ -7,7 +7,8 @@ interface E2EEContextValue {
     key: CryptoKey | null;
     isUnlocked: boolean;
     unlock(key: CryptoKey): Promise<void>;
-    lock(): Promise<void>;
+    lock(): Promise<void>;           // clears in-memory key + IndexedDB (for "Lock Vault" button)
+    lockAndForget(): Promise<void>;  // same but also used on logout
 }
 
 const E2EEContext = createContext<E2EEContextValue>({
@@ -15,6 +16,7 @@ const E2EEContext = createContext<E2EEContextValue>({
     isUnlocked: false,
     unlock: async () => {},
     lock: async () => {},
+    lockAndForget: async () => {},
 });
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -53,8 +55,13 @@ export function E2EEProvider({ children }: { children: ReactNode }) {
         if (userInfo?.id) await deleteKeyFromDevice(userInfo.id);
     }, [userInfo?.id]);
 
+    const lockAndForget = useCallback(async () => {
+        if (userInfo?.id) await deleteKeyFromDevice(userInfo.id);
+        setKey(null);
+    }, [userInfo?.id]);
+
     return (
-        <E2EEContext.Provider value={{ key, isUnlocked: key !== null, unlock, lock }}>
+        <E2EEContext.Provider value={{ key, isUnlocked: key !== null, unlock, lock, lockAndForget }}>
             {children}
         </E2EEContext.Provider>
     );
