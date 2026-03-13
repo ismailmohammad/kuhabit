@@ -13,6 +13,7 @@ import LoginPage from './components/UserActionPages/LoginPage.tsx'
 import ForgotPasswordPage from './components/UserActionPages/ForgotPasswordPage.tsx'
 import ResetPasswordPage from './components/UserActionPages/ResetPasswordPage.tsx'
 import VerifyEmailPage from './components/UserActionPages/VerifyEmailPage.tsx'
+import PrivacyPolicyPage from './components/Legal/PrivacyPolicyPage.tsx'
 import { Toaster } from 'react-hot-toast'
 import { E2EEProvider } from './context/E2EEContext.tsx'
 
@@ -44,6 +45,7 @@ const router = createBrowserRouter([
       { path: "forgot-password", element: <ForgotPasswordPage /> },
       { path: "reset-password", element: <ResetPasswordPage /> },
       { path: "verify-email", element: <VerifyEmailPage /> },
+      { path: "privacy-policy", element: <PrivacyPolicyPage /> },
     ],
   },
 ]);

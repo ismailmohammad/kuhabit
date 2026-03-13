@@ -771,6 +771,22 @@ const HeroActions = styled.div`
     margin-top: 1.5rem;
 `;
 
+const HeroLegal = styled.p`
+    margin: 0.9rem 0 0;
+    color: #8f8f8f;
+    font-size: 0.88rem;
+`;
+
+const LegalLink = styled(Link)`
+    color: #9dd7ff;
+    text-decoration: none;
+
+    &:hover {
+        text-decoration: underline;
+        color: #c2e7ff;
+    }
+`;
+
 const PrimaryBtn = styled(Link)`
     background: #2dca8e;
     color: #111;
@@ -1040,6 +1056,9 @@ export default function Landing() {
             <PrimaryBtn to="/register">Get Stoked for Stokely! — It's Free</PrimaryBtn>
             <SecondaryBtn to="/login">Sign In</SecondaryBtn>
           </HeroActions>
+          <HeroLegal>
+            Read our <LegalLink to="/privacy-policy">Privacy Policy</LegalLink>.
+          </HeroLegal>
         </Hero>
 
 

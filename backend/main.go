@@ -130,6 +130,13 @@ END $$;
 	if err := db.Exec("UPDATE users SET email_verified = true WHERE email IS NOT NULL AND email_verified = false").Error; err != nil {
 		log.Fatal("Failed to backfill email verification state:", err)
 	}
+	// Privacy minimization: scrub previously stored raw session IP/user-agent and push user-agent metadata.
+	if err := db.Exec("UPDATE user_sessions SET user_agent = '', ip_address = '' WHERE user_agent <> '' OR ip_address <> ''").Error; err != nil {
+		log.Fatal("Failed to scrub legacy session metadata:", err)
+	}
+	if err := db.Exec("UPDATE push_subscriptions SET user_agent = '' WHERE user_agent <> ''").Error; err != nil {
+		log.Fatal("Failed to scrub legacy push metadata:", err)
+	}
 	seedInitialStreakFreezes()
 
 	router := gin.Default()

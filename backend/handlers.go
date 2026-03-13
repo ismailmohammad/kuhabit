@@ -295,8 +295,9 @@ func setAuthenticatedSession(c *gin.Context, userID string) error {
 		ID:         sessionID,
 		UserID:     userID,
 		LastSeenAt: now,
-		UserAgent:  c.Request.UserAgent(),
-		IPAddress:  c.ClientIP(),
+		// Privacy-minimized session metadata: do not persist raw user agent or IP.
+		UserAgent: "",
+		IPAddress: "",
 	})
 	return nil
 }
@@ -1374,14 +1375,14 @@ func handlePushSubscribe(c *gin.Context) {
 		return
 	}
 	now := time.Now().UTC()
-	ua := c.Request.UserAgent()
 
 	var sub PushSubscription
 	err := db.Where("user_id = ? AND endpoint = ?", user.ID, input.Endpoint).First(&sub).Error
 	if err == nil {
 		sub.P256DH = input.P256DH
 		sub.Auth = input.Auth
-		sub.UserAgent = ua
+		// Privacy-minimized metadata: rely on user-provided device label.
+		sub.UserAgent = ""
 		sub.DeviceLabel = strings.TrimSpace(input.DeviceLabel)
 		sub.Enabled = true
 		sub.LastSeenAt = &now
@@ -1402,7 +1403,7 @@ func handlePushSubscribe(c *gin.Context) {
 		Endpoint:    input.Endpoint,
 		P256DH:      input.P256DH,
 		Auth:        input.Auth,
-		UserAgent:   ua,
+		UserAgent:   "",
 		DeviceLabel: strings.TrimSpace(input.DeviceLabel),
 		Enabled:     true,
 		LastSeenAt:  &now,
