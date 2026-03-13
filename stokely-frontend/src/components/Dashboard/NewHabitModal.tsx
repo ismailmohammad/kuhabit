@@ -18,7 +18,7 @@ interface HabitModalProps {
     onClose: () => void;
     onCreate: (data: {
         name: string; recurrence: string; positiveType: boolean;
-        icon?: string; recurrenceEnd?: string | null; notes?: string; reminderTime?: string;
+        icon?: string; recurrenceEnd?: string | null; notes?: string; reminderTime?: string; reminderTz?: string;
     }) => void;
     onUpdate: (id: number, changes: Record<string, unknown>) => void;
     onDelete: (id: number) => void;
@@ -48,20 +48,16 @@ function detectPreset(rec: string): string {
     return 'Custom';
 }
 
-function localTimeToUTC(localTime: string): string {
-    if (!localTime) return '';
-    const [h, m] = localTime.split(':').map(Number);
-    const d = new Date();
-    d.setHours(h, m, 0, 0);
-    return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
-}
-
 function utcTimeToLocal(utcTime: string): string {
     if (!utcTime) return '';
     const [h, m] = utcTime.split(':').map(Number);
     const d = new Date();
     d.setUTCHours(h, m, 0, 0);
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function browserTimeZone(): string {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || '';
 }
 
 function formatLocalTime(value: string): string {
@@ -165,6 +161,13 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
         }
     }, [showModal]);
 
+    useEffect(() => {
+        if (!showModal) {
+            setClosing(false);
+            setMounted(false);
+        }
+    }, [showModal]);
+
     const handleClose = useCallback(() => {
         setClosing(true);
         setTimeout(() => {
@@ -182,7 +185,13 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
             if (p === 'Custom') setCustomDays(recurrenceToCustomDays(habitToEdit.recurrence));
             setIcon(habitToEdit.icon || '');
             setNotes(habitToEdit.notes || '');
-            setReminderTime(utcTimeToLocal(habitToEdit.reminderTime || ''));
+            if (habitToEdit.reminderTime) {
+                // New habits store local reminder time with reminderTz.
+                // Legacy habits have empty reminderTz and store UTC HH:MM.
+                setReminderTime(habitToEdit.reminderTz ? habitToEdit.reminderTime : utcTimeToLocal(habitToEdit.reminderTime));
+            } else {
+                setReminderTime('');
+            }
             if (habitToEdit.recurrenceEnd) {
                 setUseEndDate(true);
                 setRecurrenceEnd(habitToEdit.recurrenceEnd.split('T')[0]);
@@ -241,7 +250,7 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const recurrence = buildRecurrence();
-        const utcReminder = localTimeToUTC(reminderTime);
+        const reminderTZ = reminderTime ? browserTimeZone() : '';
         const endDate = useEndDate && recurrenceEnd ? recurrenceEnd : null;
 
         if (reminderTime) {
@@ -272,14 +281,16 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
             onUpdate(habitToEdit.id, {
                 name: submitName, recurrence, positiveType,
                 icon, notes: submitNotes,
-                reminderTime: utcReminder,
+                reminderTime,
+                reminderTz: reminderTZ,
                 recurrenceEnd: endDate,
             });
         } else {
             onCreate({
                 name: submitName, recurrence, positiveType,
                 icon, notes: submitNotes,
-                reminderTime: utcReminder,
+                reminderTime,
+                reminderTz: reminderTZ,
                 recurrenceEnd: endDate,
             });
         }

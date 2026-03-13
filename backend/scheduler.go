@@ -25,7 +25,9 @@ func startScheduler() {
 }
 
 // runReminderLoop fires every minute (aligned to clock boundaries) and sends
-// push notifications for habits whose reminder time matches the current UTC time.
+// push notifications for due habits.
+// For habits with reminder_tz set, reminder_time is treated as local wall time in that timezone.
+// For legacy habits with empty reminder_tz, reminder_time is treated as UTC HH:MM.
 func runReminderLoop() {
 	for {
 		now := time.Now().UTC()
@@ -36,12 +38,8 @@ func runReminderLoop() {
 }
 
 func runReminderCheck(now time.Time) {
-	currentTime := fmt.Sprintf("%02d:%02d", now.Hour(), now.Minute())
-	todayKey := dayCode(now)
-	today := now.Truncate(24 * time.Hour)
-
 	var habits []Habit
-	db.Where("reminder_time = ?", currentTime).Find(&habits)
+	db.Where("reminder_time <> ''").Find(&habits)
 	if len(habits) == 0 {
 		return
 	}
@@ -68,17 +66,21 @@ func runReminderCheck(now time.Time) {
 	}
 
 	for _, h := range habits {
-		if !containsDay(h.Recurrence, todayKey) {
+		isDueNow, dayKey, logDate, recurrenceRef := reminderDueNow(h, now)
+		if !isDueNow {
 			continue
 		}
-		if h.RecurrenceEnd != nil && now.After(*h.RecurrenceEnd) {
+		if !containsDay(h.Recurrence, dayKey) {
+			continue
+		}
+		if h.RecurrenceEnd != nil && recurrenceRef.After(*h.RecurrenceEnd) {
 			continue
 		}
 
 		// Skip if already completed today
 		var count int64
 		db.Model(&HabitLog{}).
-			Where("habit_id = ? AND log_date = ? AND was_frozen = false", h.ID, today).
+			Where("habit_id = ? AND log_date = ? AND was_frozen = false", h.ID, logDate).
 			Count(&count)
 		if count > 0 {
 			continue
@@ -95,6 +97,37 @@ func runReminderCheck(now time.Time) {
 			}
 		}
 	}
+}
+
+func reminderDueNow(h Habit, nowUTC time.Time) (bool, string, time.Time, time.Time) {
+	if h.ReminderTime == "" {
+		return false, "", time.Time{}, time.Time{}
+	}
+
+	// Legacy behavior (no timezone captured): reminder_time treated as UTC HH:MM.
+	if h.ReminderTZ == "" {
+		currentUTC := fmt.Sprintf("%02d:%02d", nowUTC.Hour(), nowUTC.Minute())
+		if h.ReminderTime != currentUTC {
+			return false, "", time.Time{}, time.Time{}
+		}
+		return true, dayCode(nowUTC), nowUTC.Truncate(24 * time.Hour), nowUTC
+	}
+
+	loc, err := time.LoadLocation(h.ReminderTZ)
+	if err != nil {
+		log.Printf("invalid reminder timezone %q for habit %d: %v", h.ReminderTZ, h.ID, err)
+		return false, "", time.Time{}, time.Time{}
+	}
+	localNow := nowUTC.In(loc)
+	currentLocal := fmt.Sprintf("%02d:%02d", localNow.Hour(), localNow.Minute())
+	if h.ReminderTime != currentLocal {
+		return false, "", time.Time{}, time.Time{}
+	}
+	logDate, err := time.Parse("2006-01-02", localNow.Format("2006-01-02"))
+	if err != nil {
+		return false, "", time.Time{}, time.Time{}
+	}
+	return true, dayCode(localNow), logDate.UTC(), localNow
 }
 
 func reminderBody(e2eeEnabled bool, habitName string) string {

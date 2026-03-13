@@ -1,6 +1,18 @@
-# Stokely
+<p align="center">
+  <img src="stokely-frontend/src/assets/kindling/kindling-shield.png" alt="Kindling Shield mascot" width="220" />
+</p>
 
-> Build your streaks. Stoke your momentum.
+<h1 align="center">Stokely</h1>
+
+<p align="center" style="margin-top: 1.1rem;"><strong>Build your streaks. Stoke your momentum.</strong></p>
+
+<p align="center">
+  <a href="https://github.com/ismailmohammad/kuhabit/actions/workflows/prod-ci-cd.yml"><img src="https://github.com/ismailmohammad/kuhabit/actions/workflows/prod-ci-cd.yml/badge.svg?branch=main" alt="Prod CI/CD" /></a>
+  <img src="https://img.shields.io/badge/Playwright-E2E%20Smoke-45BA63?logo=playwright&logoColor=white" alt="Playwright E2E" />
+  <img src="https://img.shields.io/badge/Docker-Containerized-2496ED?logo=docker&logoColor=white" alt="Docker" />
+  <img src="https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go&logoColor=white" alt="Go 1.25+" />
+  <img src="https://img.shields.io/badge/React%20%2B%20TypeScript-Frontend-3178C6?logo=react&logoColor=white" alt="React + TypeScript" />
+</p>
 
 Stokely is a full-stack habit tracker for building good habits and curbing bad ones, with optional account-wide end-to-end encryption (E2EE), streak mechanics, and device-level reminder notifications.
 

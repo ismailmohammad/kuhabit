@@ -4,6 +4,7 @@ import (
 	"crypto/elliptic"
 	"encoding/base64"
 	"testing"
+	"time"
 )
 
 func TestDecodeBase64URLNoPad(t *testing.T) {
@@ -83,6 +84,64 @@ func TestReminderBody(t *testing.T) {
 	}
 	if got := reminderBody(false, "e2ee:v1:abcdef"); got != "your habit" {
 		t.Fatalf("reminderBody for encrypted habit name = %q, want fallback", got)
+	}
+}
+
+func TestReminderDueNowLegacyUTC(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 3, 13, 14, 30, 0, 0, time.UTC)
+	h := Habit{ID: 1, ReminderTime: "14:30", ReminderTZ: ""}
+	due, dayKey, logDate, _ := reminderDueNow(h, now)
+	if !due {
+		t.Fatal("expected reminder to be due")
+	}
+	if dayKey != "Fr" {
+		t.Fatalf("dayKey = %q, want %q", dayKey, "Fr")
+	}
+	if got := logDate.Format("2006-01-02"); got != "2026-03-13" {
+		t.Fatalf("logDate = %q, want %q", got, "2026-03-13")
+	}
+}
+
+func TestReminderDueNowTimezoneAware(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 3, 13, 14, 30, 0, 0, time.UTC)
+	loc, err := time.LoadLocation("America/Toronto")
+	if err != nil {
+		t.Fatalf("failed to load timezone: %v", err)
+	}
+	localMatch := now.In(loc).Format("15:04")
+	h := Habit{ID: 2, ReminderTime: localMatch, ReminderTZ: "America/Toronto"}
+	due, dayKey, logDate, localNow := reminderDueNow(h, now)
+	if !due {
+		t.Fatal("expected timezone reminder to be due")
+	}
+	if dayKey == "" {
+		t.Fatal("expected non-empty day key")
+	}
+	if logDate.IsZero() {
+		t.Fatal("expected non-zero logDate")
+	}
+	if localNow.Location().String() != "America/Toronto" {
+		t.Fatalf("localNow location = %q, want America/Toronto", localNow.Location().String())
+	}
+}
+
+func TestReminderDueNowTimezoneMissingMatch(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 3, 13, 14, 30, 0, 0, time.UTC)
+	loc, err := time.LoadLocation("America/Toronto")
+	if err != nil {
+		t.Fatalf("failed to load timezone: %v", err)
+	}
+	nonMatch := now.In(loc).Add(time.Hour).Format("15:04")
+	h := Habit{ID: 3, ReminderTime: nonMatch, ReminderTZ: "America/Toronto"}
+	due, _, _, _ := reminderDueNow(h, now)
+	if due {
+		t.Fatal("expected reminder not to be due")
 	}
 }
 

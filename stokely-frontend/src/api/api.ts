@@ -67,7 +67,7 @@ export const api = {
             req<HabitType[]>(`/habits?view=${view}${date ? `&date=${date}` : ''}`),
         create: (data: {
             name: string; recurrence: string; positiveType: boolean;
-            icon?: string; recurrenceEnd?: string | null; notes?: string; reminderTime?: string;
+            icon?: string; recurrenceEnd?: string | null; notes?: string; reminderTime?: string; reminderTz?: string;
         }) =>
             req<HabitType>('/habits', { method: 'POST', body: JSON.stringify(data) }),
         update: (id: number, changes: Record<string, unknown>) =>

@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -60,6 +61,20 @@ func TestIsValidReminderTime(t *testing.T) {
 		if got := isValidReminderTime(tc.in); got != tc.want {
 			t.Fatalf("isValidReminderTime(%q) = %v, want %v", tc.in, got, tc.want)
 		}
+	}
+}
+
+func TestIsValidTimeZone(t *testing.T) {
+	t.Parallel()
+
+	if !isValidTimeZone("") {
+		t.Fatal("empty timezone should be valid")
+	}
+	if !isValidTimeZone("America/Toronto") {
+		t.Fatal("expected America/Toronto to be valid")
+	}
+	if isValidTimeZone("Not/A-Real-TZ") {
+		t.Fatal("expected invalid timezone to fail")
 	}
 }
 
@@ -135,6 +150,41 @@ func TestStreakFromLoggedDatesSkipsMissingToday(t *testing.T) {
 	got := streakFromLoggedDates(habit, loggedDates, today, windowStart)
 	if got != 2 {
 		t.Fatalf("streakFromLoggedDates = %d, want 2", got)
+	}
+}
+
+func TestCooldownCeilSeconds(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		in   time.Duration
+		want int
+	}{
+		{in: 0, want: 0},
+		{in: 200 * time.Millisecond, want: 1},
+		{in: 1 * time.Second, want: 1},
+		{in: 1500 * time.Millisecond, want: 2},
+		{in: 59 * time.Second, want: 59},
+	}
+	for _, tc := range cases {
+		if got := cooldownCeilSeconds(tc.in); got != tc.want {
+			t.Fatalf("cooldownCeilSeconds(%v) = %d, want %d", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestResendCooldownRemaining(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 3, 13, 12, 0, 0, 0, time.UTC)
+	last := now.Add(-30 * time.Second)
+	if got := resendCooldownRemaining(last, now); got != 30*time.Second {
+		t.Fatalf("resendCooldownRemaining = %v, want %v", got, 30*time.Second)
+	}
+
+	lastOld := now.Add(-2 * time.Minute)
+	if got := resendCooldownRemaining(lastOld, now); got != 0 {
+		t.Fatalf("resendCooldownRemaining for old token = %v, want 0", got)
 	}
 }
 
@@ -288,5 +338,68 @@ func TestCheckAuthRateLimit(t *testing.T) {
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusTooManyRequests {
 		t.Fatalf("request %d status = %d, want %d", authRateMax+1, w.Code, http.StatusTooManyRequests)
+	}
+}
+
+func TestRecordLoginFailureLocksAccount(t *testing.T) {
+	loginIPLimitMap = sync.Map{}
+	loginAccountLimitMap = sync.Map{}
+	loginLimiterJanitorOnce = sync.Once{}
+
+	now := time.Date(2026, 3, 13, 12, 0, 0, 0, time.UTC)
+	ip := "198.51.100.10"
+	username := "DemoUser"
+
+	var remaining time.Duration
+	for i := 0; i < loginAccountMaxFailures; i++ {
+		remaining = recordLoginFailure(ip, username, now)
+	}
+	if remaining <= 0 {
+		t.Fatalf("expected account lockout after %d failures", loginAccountMaxFailures)
+	}
+	if got := loginLockoutRemaining(ip, username, now); got <= 0 {
+		t.Fatalf("expected login lockout remaining > 0, got %v", got)
+	}
+}
+
+func TestRecordLoginFailureLocksIP(t *testing.T) {
+	loginIPLimitMap = sync.Map{}
+	loginAccountLimitMap = sync.Map{}
+	loginLimiterJanitorOnce = sync.Once{}
+
+	now := time.Date(2026, 3, 13, 12, 0, 0, 0, time.UTC)
+	ip := "198.51.100.11"
+
+	var remaining time.Duration
+	for i := 0; i < loginIPMaxFailures; i++ {
+		remaining = recordLoginFailure(ip, "user"+strconv.Itoa(i), now)
+	}
+	if remaining <= 0 {
+		t.Fatalf("expected ip lockout after %d failures", loginIPMaxFailures)
+	}
+	if got := loginLockoutRemaining(ip, "any-user", now); got <= 0 {
+		t.Fatalf("expected ip lockout remaining > 0, got %v", got)
+	}
+}
+
+func TestClearLoginFailures(t *testing.T) {
+	loginIPLimitMap = sync.Map{}
+	loginAccountLimitMap = sync.Map{}
+	loginLimiterJanitorOnce = sync.Once{}
+
+	now := time.Date(2026, 3, 13, 12, 0, 0, 0, time.UTC)
+	ip := "198.51.100.12"
+	username := "clearme"
+
+	for i := 0; i < loginAccountMaxFailures; i++ {
+		recordLoginFailure(ip, username, now)
+	}
+	if got := loginLockoutRemaining(ip, username, now); got <= 0 {
+		t.Fatalf("expected lockout before clear, got %v", got)
+	}
+
+	clearLoginFailures(ip, username)
+	if got := loginLockoutRemaining(ip, username, now); got != 0 {
+		t.Fatalf("expected lockout to be cleared, got %v", got)
 	}
 }

@@ -29,6 +29,7 @@ type Habit struct {
 	RecurrenceEnd *time.Time `json:"recurrenceEnd,omitempty"`
 	Notes         string     `gorm:"type:text;default:''" json:"notes"`
 	ReminderTime  string     `gorm:"type:varchar(5);default:''" json:"reminderTime"`
+	ReminderTZ    string     `gorm:"type:varchar(64);default:''" json:"reminderTz,omitempty"`
 }
 
 // HabitResponse is returned by all habit API endpoints, including computed fields.
@@ -43,6 +44,7 @@ type HabitResponse struct {
 	RecurrenceEnd *time.Time `json:"recurrenceEnd,omitempty"`
 	Notes         string     `json:"notes"`
 	ReminderTime  string     `json:"reminderTime"`
+	ReminderTZ    string     `json:"reminderTz,omitempty"`
 	Streak        int        `json:"streak"`
 	HasFreeze     bool       `json:"hasFreeze"`
 	FrozenToday   bool       `json:"frozenToday"`

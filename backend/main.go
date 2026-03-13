@@ -91,6 +91,9 @@ func main() {
 	if err := db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS e2ee_verifier varchar(512) NOT NULL DEFAULT ''`).Error; err != nil {
 		log.Fatal("Failed to ensure users.e2ee_verifier:", err)
 	}
+	if err := db.Exec(`ALTER TABLE habits ADD COLUMN IF NOT EXISTS reminder_tz varchar(64) NOT NULL DEFAULT ''`).Error; err != nil {
+		log.Fatal("Failed to ensure habits.reminder_tz:", err)
+	}
 	// Legacy bridge: if earlier migrations created e2_ee_* columns, copy values into canonical e2ee_* columns.
 	if err := db.Exec(`
 	DO $$
