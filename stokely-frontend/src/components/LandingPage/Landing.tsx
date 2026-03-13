@@ -6,9 +6,13 @@ import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
   Flame,
-  Ban,
   CalendarDays,
-  Shield
+  BellRing,
+  KeyRound,
+  Smartphone,
+  Clock3,
+  ShieldCheck,
+  Lock
 } from "lucide-react";
 
 import CubeGreen from '../../assets/cube-logo-green.png';
@@ -771,6 +775,22 @@ const HeroActions = styled.div`
     margin-top: 1.5rem;
 `;
 
+const HeroLegal = styled.p`
+    margin: 0.9rem 0 0;
+    color: #8f8f8f;
+    font-size: 0.88rem;
+`;
+
+const LegalLink = styled(Link)`
+    color: #9dd7ff;
+    text-decoration: none;
+
+    &:hover {
+        text-decoration: underline;
+        color: #c2e7ff;
+    }
+`;
+
 const PrimaryBtn = styled(Link)`
     background: #2dca8e;
     color: #111;
@@ -1040,6 +1060,9 @@ export default function Landing() {
             <PrimaryBtn to="/register">Get Stoked for Stokely! — It's Free</PrimaryBtn>
             <SecondaryBtn to="/login">Sign In</SecondaryBtn>
           </HeroActions>
+          <HeroLegal>
+            Read our <LegalLink to="/privacy-policy">Privacy Policy</LegalLink>.
+          </HeroLegal>
         </Hero>
 
 
@@ -1124,31 +1147,59 @@ export default function Landing() {
           <FeaturesGrid>
             <FeatureCard>
               <FeatureIcon>
-                <Flame color="#ca962d" />
+                <Flame color="#ff9f43" />
               </FeatureIcon>
-              <FeatureTitle>Build Habits</FeatureTitle>
-              <FeatureText>Track positive habits you want to reinforce daily or on a custom schedule.</FeatureText>
+              <FeatureTitle>Streak Engine + Freeze Protection</FeatureTitle>
+              <FeatureText>Build momentum with daily streak tracking and protection mechanics so one bad day does not wipe long progress.</FeatureText>
             </FeatureCard>
             <FeatureCard>
               <FeatureIcon>
-                <Ban color="#ff6b6b" />
+                <Clock3 color="#ff6b6b" />
               </FeatureIcon>
               <FeatureTitle>Curb Habits</FeatureTitle>
-              <FeatureText>Mark negative habits you're working to eliminate and celebrate your wins.</FeatureText>
+              <FeatureText>Track habits you are reducing, stay accountable, and measure clean streaks over time.</FeatureText>
             </FeatureCard>
             <FeatureCard>
               <FeatureIcon>
-                <CalendarDays color="#ffffff" />
+                <BellRing color="#ffd166" />
               </FeatureIcon>
-              <FeatureTitle>Flexible Recurrence</FeatureTitle>
-              <FeatureText>Set habits to repeat daily, weekdays, weekends, or any custom combination.</FeatureText>
+              <FeatureTitle>Reminders by Device</FeatureTitle>
+              <FeatureText>Enable push reminders per device, test delivery, and control which devices can receive notifications.</FeatureText>
             </FeatureCard>
             <FeatureCard>
               <FeatureIcon>
-                <Shield color="#5da8ff" />
+                <KeyRound color="#5da8ff" />
               </FeatureIcon>
-              <FeatureTitle>Private by Design</FeatureTitle>
-              <FeatureText>Your habits are personal. No tracking, no ads, no third-party data sharing.</FeatureText>
+              <FeatureTitle>End-to-End Encrypted Vault</FeatureTitle>
+              <FeatureText>Optionally encrypt habit names and notes with a passphrase-derived key. Your passphrase stays on your devices.</FeatureText>
+            </FeatureCard>
+            <FeatureCard>
+              <FeatureIcon>
+                <Smartphone color="#77d2ff" />
+              </FeatureIcon>
+              <FeatureTitle>Session + Account Controls</FeatureTitle>
+              <FeatureText>Review active sessions, sign out other devices, export your data, and manage account security from settings.</FeatureText>
+            </FeatureCard>
+            <FeatureCard>
+              <FeatureIcon>
+                <CalendarDays color="#9ce3be" />
+              </FeatureIcon>
+              <FeatureTitle>Flexible Scheduling</FeatureTitle>
+              <FeatureText>Use daily, weekday/weekend, or custom recurrence patterns with optional end dates and calendar views.</FeatureText>
+            </FeatureCard>
+            <FeatureCard>
+              <FeatureIcon>
+                <ShieldCheck color="#8cc7ff" />
+              </FeatureIcon>
+              <FeatureTitle>More Than a Reminder List</FeatureTitle>
+              <FeatureText>Stokely is built for behavior change, not just one-off tasks: streak visibility, recovery mechanics, and habit-focused workflows keep momentum tangible.</FeatureText>
+            </FeatureCard>
+            <FeatureCard>
+              <FeatureIcon>
+                <Lock color="#7ee0bc" />
+              </FeatureIcon>
+              <FeatureTitle>Privacy You Can Use Daily</FeatureTitle>
+              <FeatureText>Compared with general reminder apps, Stokely gives habit-specific structure plus optional account-wide E2EE and a lockable vault designed around personal routines.</FeatureText>
             </FeatureCard>
           </FeaturesGrid>
         </LazySection>

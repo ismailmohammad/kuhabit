@@ -75,15 +75,25 @@ func main() {
 
 	enforceUUIDUserIDSchema()
 
-	db.AutoMigrate(&User{}, &Habit{}, &HabitLog{}, &PushSubscription{}, &StreakFreeze{}, &UserSession{}, &EmailToken{})
+	if err := db.AutoMigrate(&User{}, &Habit{}, &HabitLog{}, &PushSubscription{}, &StreakFreeze{}, &UserSession{}, &EmailToken{}); err != nil {
+		log.Fatal("Failed to run schema migration:", err)
+	}
 	// Safety net: ensure E2EE columns exist even if AutoMigrate missed them on existing tables.
-	db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS e2ee_enabled boolean NOT NULL DEFAULT false`)
-	db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS e2ee_prompt_pending boolean NOT NULL DEFAULT true`)
-	db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS e2ee_salt varchar(64) NOT NULL DEFAULT ''`)
-	db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS e2ee_verifier varchar(512) NOT NULL DEFAULT ''`)
+	if err := db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS e2ee_enabled boolean NOT NULL DEFAULT false`).Error; err != nil {
+		log.Fatal("Failed to ensure users.e2ee_enabled:", err)
+	}
+	if err := db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS e2ee_prompt_pending boolean NOT NULL DEFAULT true`).Error; err != nil {
+		log.Fatal("Failed to ensure users.e2ee_prompt_pending:", err)
+	}
+	if err := db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS e2ee_salt varchar(64) NOT NULL DEFAULT ''`).Error; err != nil {
+		log.Fatal("Failed to ensure users.e2ee_salt:", err)
+	}
+	if err := db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS e2ee_verifier varchar(512) NOT NULL DEFAULT ''`).Error; err != nil {
+		log.Fatal("Failed to ensure users.e2ee_verifier:", err)
+	}
 	// Legacy bridge: if earlier migrations created e2_ee_* columns, copy values into canonical e2ee_* columns.
-	db.Exec(`
-DO $$
+	if err := db.Exec(`
+	DO $$
 BEGIN
 	IF EXISTS (
 		SELECT 1 FROM information_schema.columns
@@ -103,25 +113,38 @@ BEGIN
 		SELECT 1 FROM information_schema.columns
 		WHERE table_name = 'users' AND column_name = 'e2_ee_salt'
 	) THEN
-		EXECUTE 'UPDATE users SET e2ee_salt = COALESCE(NULLIF(e2ee_salt, ''''''), NULLIF(e2_ee_salt, ''''''), '''''')';
+		EXECUTE $sql$UPDATE users SET e2ee_salt = COALESCE(NULLIF(e2ee_salt, ''), NULLIF(e2_ee_salt, ''), '')$sql$;
 	END IF;
 
 	IF EXISTS (
 		SELECT 1 FROM information_schema.columns
 		WHERE table_name = 'users' AND column_name = 'e2_ee_verifier'
 	) THEN
-		EXECUTE 'UPDATE users SET e2ee_verifier = COALESCE(NULLIF(e2ee_verifier, ''''''), NULLIF(e2_ee_verifier, ''''''), '''''')';
+		EXECUTE $sql$UPDATE users SET e2ee_verifier = COALESCE(NULLIF(e2ee_verifier, ''), NULLIF(e2_ee_verifier, ''), '')$sql$;
 	END IF;
 END $$;
-`)
+`).Error; err != nil {
+		log.Fatal("Failed to backfill legacy E2EE columns:", err)
+	}
 	// Trust emails that existed before the verification system was added.
-	db.Exec("UPDATE users SET email_verified = true WHERE email IS NOT NULL AND email_verified = false")
+	if err := db.Exec("UPDATE users SET email_verified = true WHERE email IS NOT NULL AND email_verified = false").Error; err != nil {
+		log.Fatal("Failed to backfill email verification state:", err)
+	}
+	// Privacy minimization: scrub previously stored raw session IP/user-agent and push user-agent metadata.
+	if err := db.Exec("UPDATE user_sessions SET user_agent = '', ip_address = '' WHERE user_agent <> '' OR ip_address <> ''").Error; err != nil {
+		log.Fatal("Failed to scrub legacy session metadata:", err)
+	}
+	if err := db.Exec("UPDATE push_subscriptions SET user_agent = '' WHERE user_agent <> ''").Error; err != nil {
+		log.Fatal("Failed to scrub legacy push metadata:", err)
+	}
 	seedInitialStreakFreezes()
 
 	router := gin.Default()
 	// Trust only private RFC1918 ranges — the backend is reachable only from
 	// Docker-internal containers (nginx → backend), never directly from the internet.
-	router.SetTrustedProxies([]string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"})
+	if err := router.SetTrustedProxies([]string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"}); err != nil {
+		log.Fatal("Failed to configure trusted proxies:", err)
+	}
 
 	allowedOrigins := []string{}
 	for _, origin := range strings.Split(getEnv("FRONTEND_ORIGIN", ""), ",") {
@@ -153,6 +176,9 @@ END $$;
 	sessionCookieSameSite = parseSameSite(getEnv("COOKIE_SAMESITE", "lax"))
 	sessionCookieSecure = getEnv("COOKIE_SECURE", "") == "true"
 	sessionCookieDomain = getEnv("COOKIE_DOMAIN", "")
+	if strings.EqualFold(getEnv("GIN_MODE", ""), "release") && !sessionCookieSecure {
+		log.Fatal("COOKIE_SECURE must be true when GIN_MODE=release")
+	}
 	if sessionCookieSameSite == http.SameSiteNoneMode && !sessionCookieSecure {
 		log.Fatal("COOKIE_SAMESITE=none requires COOKIE_SECURE=true")
 	}
@@ -257,7 +283,9 @@ END $$;
 
 	port := getEnv("PORT", "9090")
 	log.Printf("Starting server on :%s", port)
-	router.Run(":" + port)
+	if err := router.Run(":" + port); err != nil {
+		log.Fatal("Server failed:", err)
+	}
 }
 
 func getEnv(key, defaultVal string) string {

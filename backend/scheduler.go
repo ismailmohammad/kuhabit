@@ -234,7 +234,9 @@ func sendPush(sub PushSubscription, title, body string) (int, error) {
 				responseBody = string(b)
 			}
 		}
-		resp.Body.Close()
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			log.Printf("push response body close failed for endpoint_host=%s: %v", endpointHost, closeErr)
+		}
 	}
 	if err == nil && (statusCode < 200 || statusCode >= 300) {
 		err = fmt.Errorf("push service returned non-2xx status: %d (endpoint_host=%s, subscriber=%s)", statusCode, endpointHost, subscriber)

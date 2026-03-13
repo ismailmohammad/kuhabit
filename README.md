@@ -77,6 +77,9 @@ cd backend && go run .
 
 TypeScript check: `cd stokely-frontend && ./node_modules/typescript/bin/tsc --noEmit`
 
+SQL injection guard scan (backend query construction patterns):
+`./scripts/check-sql-injection-guard.sh`
+
 ---
 
 ## Production Deployment

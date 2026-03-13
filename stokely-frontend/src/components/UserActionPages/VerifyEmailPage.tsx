@@ -15,6 +15,10 @@ export default function VerifyEmailPage() {
             setMessage('No verification token found in this link.');
             return;
         }
+        // Remove token from URL/history after reading it.
+        if (window.location.search) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
         api.auth.verifyEmail(token)
             .then(res => { setStatus('success'); setMessage(res.message); })
             .catch(err => { setStatus('error'); setMessage(err instanceof Error ? err.message : 'Verification failed.'); });

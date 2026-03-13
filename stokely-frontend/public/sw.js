@@ -1,3 +1,14 @@
+function safeNotificationUrl(rawUrl) {
+    try {
+        const candidate = typeof rawUrl === 'string' && rawUrl ? rawUrl : '/dashboard';
+        const parsed = new URL(candidate, self.location.origin);
+        if (parsed.origin !== self.location.origin) return '/dashboard';
+        return `${parsed.pathname}${parsed.search}${parsed.hash}` || '/dashboard';
+    } catch {
+        return '/dashboard';
+    }
+}
+
 self.addEventListener('push', event => {
     let data = {};
     try {
@@ -9,7 +20,7 @@ self.addEventListener('push', event => {
 
     const title = data.title || 'Stokely';
     const body = data.body || 'You have a habit reminder';
-    const url = data.url || '/dashboard';
+    const url = safeNotificationUrl(data.url);
 
     event.waitUntil(
         self.registration.showNotification(title, {
@@ -35,6 +46,7 @@ self.addEventListener('notificationclick', event => {
                 return;
             }
         }
-        await clients.openWindow((event.notification.data && event.notification.data.url) || '/dashboard');
+        const rawUrl = event.notification.data && event.notification.data.url;
+        await clients.openWindow(safeNotificationUrl(rawUrl));
     })());
 });
