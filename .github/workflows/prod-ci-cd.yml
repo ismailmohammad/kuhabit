@@ -150,8 +150,8 @@ jobs:
           ssh -p "$PORT" "$TARGET" "set -euo pipefail; \
             cd \"$DEPLOY_PATH\"; \
             git fetch origin main; \
-            git checkout main; \
-            git pull --ff-only origin main; \
+            git checkout -B main origin/main; \
+            git reset --hard origin/main; \
             export DOCKER_USERNAME=\"$DOCKERHUB_USERNAME\"; \
             docker compose -f docker-compose.prod.yml pull; \
             docker compose -f docker-compose.prod.yml up -d --remove-orphans; \
