@@ -235,7 +235,8 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
         return ALL_DAYS.filter(d => customDays[d]).join('-') || 'Su';
     };
 
-    const todayISO = new Date().toISOString().split('T')[0];
+    const d = new Date();
+    const todayISO = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

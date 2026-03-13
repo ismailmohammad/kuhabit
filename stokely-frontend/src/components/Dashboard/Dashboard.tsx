@@ -50,7 +50,11 @@ function getRandomCubeLogo(positive: boolean): string {
 }
 
 function todayISO(): string {
-    return new Date().toISOString().split('T')[0];
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
 }
 
 function randomItem<T>(items: T[]): T {
@@ -735,7 +739,7 @@ export default function Dashboard() {
                     const me = await api.auth.me();
                     if (!cancelled) dispatch(setUserInfo(me));
                 }
-                const date = view === 'calendar' ? calendarDate : undefined;
+                const date = view === 'calendar' ? calendarDate : (view === 'daily' ? todayISO() : undefined);
                 const listView = view === 'streak' || view === 'achievements' ? 'all' : view;
                 const [data, achievementData] = await Promise.all([
                     api.habits.list(listView, date),
@@ -760,7 +764,7 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [view, calendarDate, dispatch, navigate, userInfo, isUnlocked]);
 
-    const effectiveDate = view === 'calendar' ? calendarDate : undefined;
+    const effectiveDate = view === 'calendar' ? calendarDate : todayISO();
 
     const dismissConfirm = () => {
         setConfirmClosing(true);
@@ -969,7 +973,7 @@ export default function Dashboard() {
             } else {
                 await api.habits.logUncomplete(habit.id, effectiveDate);
             }
-            const date = view === 'calendar' ? calendarDate : undefined;
+            const date = view === 'calendar' ? calendarDate : (view === 'daily' ? todayISO() : undefined);
             const listView = view === 'streak' || view === 'achievements' ? 'all' : view;
             const [data, achievementData] = await Promise.all([
                 api.habits.list(listView, date),

@@ -1,0 +1,8 @@
+Issues:
+
+- Enable e2ee in settings enables e2ee on the account level. Logging out and back in shouldn't change that. You set up e2ee once and it's enabled
+across all your devices.
+- Enabling e2ee right now and then trying to lock vault it says not configured
+- When the vault is unlocked, you can see your encrypted habits name/notes and edit as usual. 
+
+Something is wrong, let's fix things.
