@@ -153,6 +153,9 @@ END $$;
 	sessionCookieSameSite = parseSameSite(getEnv("COOKIE_SAMESITE", "lax"))
 	sessionCookieSecure = getEnv("COOKIE_SECURE", "") == "true"
 	sessionCookieDomain = getEnv("COOKIE_DOMAIN", "")
+	if strings.EqualFold(getEnv("GIN_MODE", ""), "release") && !sessionCookieSecure {
+		log.Fatal("COOKIE_SECURE must be true when GIN_MODE=release")
+	}
 	if sessionCookieSameSite == http.SameSiteNoneMode && !sessionCookieSecure {
 		log.Fatal("COOKIE_SAMESITE=none requires COOKIE_SECURE=true")
 	}

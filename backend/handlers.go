@@ -2,10 +2,13 @@ package main
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -28,11 +31,35 @@ type authBucket struct {
 }
 
 var authLimitMap sync.Map
+var authLimiterJanitorOnce sync.Once
 
 const authRateWindow = time.Minute
 const authRateMax = 10
+const forgotPasswordGenericMessage = "If an account exists, a password reset email has been sent"
+
+func startAuthRateLimiterJanitor() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for now := range ticker.C {
+		authLimitMap.Range(func(key, value any) bool {
+			b, ok := value.(*authBucket)
+			if !ok {
+				authLimitMap.Delete(key)
+				return true
+			}
+			b.mu.Lock()
+			expired := now.After(b.windowEnd.Add(5 * authRateWindow))
+			b.mu.Unlock()
+			if expired {
+				authLimitMap.Delete(key)
+			}
+			return true
+		})
+	}
+}
 
 func checkAuthRateLimit(c *gin.Context) bool {
+	authLimiterJanitorOnce.Do(func() { go startAuthRateLimiterJanitor() })
 	ip := c.ClientIP()
 	now := time.Now()
 	val, _ := authLimitMap.LoadOrStore(ip, &authBucket{windowEnd: now.Add(authRateWindow)})
@@ -115,6 +142,11 @@ func parseDateOrToday(dateStr string) (time.Time, error) {
 		return time.Time{}, err
 	}
 	return t.UTC(), nil
+}
+
+func hashEmailToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }
 
 // computeStreak counts consecutive completed (or frozen) scheduled days, ending at referenceDate.
@@ -1110,7 +1142,31 @@ func handleChangePassword(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process password"})
 		return
 	}
-	db.Model(&user).UpdateColumn("password", string(hash))
+	tx := db.Begin()
+	if tx.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start password update"})
+		return
+	}
+	if err := tx.Model(&User{}).Where("id = ?", user.ID).UpdateColumn("password", string(hash)).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update password"})
+		return
+	}
+	// Revoke every active session to invalidate stolen cookies immediately.
+	if err := tx.Where("user_id = ?", user.ID).Delete(&UserSession{}).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke active sessions"})
+		return
+	}
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit password update"})
+		return
+	}
+	// Issue a fresh session for the current device after revocation.
+	if err := setAuthenticatedSession(c, user.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Password updated but failed to refresh session"})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "Password updated"})
 }
 
@@ -1522,7 +1578,7 @@ func queueEmailVerification(userID, username, email string) error {
 		return err
 	}
 	et := EmailToken{
-		Token:     token,
+		Token:     hashEmailToken(token),
 		UserID:    userID,
 		Email:     strings.ToLower(strings.TrimSpace(email)),
 		Type:      "verify",
@@ -1574,7 +1630,7 @@ func handleVerifyEmail(c *gin.Context) {
 	}
 
 	var et EmailToken
-	if err := db.Where("token = ? AND type = ?", token, "verify").First(&et).Error; err != nil {
+	if err := db.Where("token = ? AND type = ?", hashEmailToken(token), "verify").First(&et).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired verification link"})
 		return
 	}
@@ -1645,16 +1701,17 @@ func handleForgotPassword(c *gin.Context) {
 
 	var user User
 	if err := db.Where("username = ?", input.Username).First(&user).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "No account found with that username"})
+		c.JSON(http.StatusOK, gin.H{"message": forgotPasswordGenericMessage})
 		return
 	}
 	if user.Email == nil || !user.EmailVerified {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "This account has no verified email address. Account recovery is not available."})
+		c.JSON(http.StatusOK, gin.H{"message": forgotPasswordGenericMessage})
 		return
 	}
 
 	if !smtpConfigured() {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Email service not configured"})
+		log.Printf("forgot-password requested for user=%s but SMTP is not configured", user.ID)
+		c.JSON(http.StatusOK, gin.H{"message": forgotPasswordGenericMessage})
 		return
 	}
 
@@ -1663,26 +1720,29 @@ func handleForgotPassword(c *gin.Context) {
 
 	token, err := generateSessionID()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate reset token"})
+		log.Printf("forgot-password token generation failed for user=%s: %v", user.ID, err)
+		c.JSON(http.StatusOK, gin.H{"message": forgotPasswordGenericMessage})
 		return
 	}
 	et := EmailToken{
-		Token:     token,
+		Token:     hashEmailToken(token),
 		UserID:    user.ID,
 		Email:     *user.Email,
 		Type:      "reset",
 		ExpiresAt: time.Now().UTC().Add(10 * time.Minute),
 	}
 	if err := db.Create(&et).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create reset token"})
+		log.Printf("forgot-password token persist failed for user=%s: %v", user.ID, err)
+		c.JSON(http.StatusOK, gin.H{"message": forgotPasswordGenericMessage})
 		return
 	}
 	resetURL := appURL() + "/reset-password?token=" + token
 	if err := sendEmail(*user.Email, "Reset your Stokely password", resetPasswordHTML(user.Username, resetURL)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send reset email"})
+		log.Printf("forgot-password email send failed for user=%s: %v", user.ID, err)
+		c.JSON(http.StatusOK, gin.H{"message": forgotPasswordGenericMessage})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "Password reset email sent"})
+	c.JSON(http.StatusOK, gin.H{"message": forgotPasswordGenericMessage})
 }
 
 func handleResetPassword(c *gin.Context) {
@@ -1700,7 +1760,7 @@ func handleResetPassword(c *gin.Context) {
 	}
 
 	var et EmailToken
-	if err := db.Where("token = ? AND type = ?", input.Token, "reset").First(&et).Error; err != nil {
+	if err := db.Where("token = ? AND type = ?", hashEmailToken(input.Token), "reset").First(&et).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired reset link"})
 		return
 	}
