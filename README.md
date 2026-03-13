@@ -24,24 +24,39 @@ This was mainly built to test the workflow with Codex/Claude to build an all aro
 
 ## Demo
 
-This section is intentionally left as a placeholder so you can add your latest media.
+### Product Walkthrough
 
-- TODO: Add short product walkthrough video/GIF
-- TODO: Add onboarding + E2EE flow demo
-- TODO: Add habit creation/completion flow demo
+<p align="center">
+  <video src="https://github.com/user-attachments/assets/91a75004-a278-419f-86a8-c0ad4474aafa" width="700" controls></video>
+</p>
+
+### Onboarding and End-to-End Encryption Flow
+
+<p align="center">
+  <video src="https://github.com/user-attachments/assets/d7196e99-69bc-44f7-ba91-e0537958c8e4" width="700" controls></video>
+</p>
 
 ---
 
 ## Screenshots
 
-This section is intentionally left as a placeholder so you can add up-to-date images.
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/d755eda6-18c0-4cf1-b26b-70421016caf7" width="700"/>
+</p>
 
-- TODO: Landing page screenshot
-- TODO: Dashboard (daily + calendar views) screenshot
-- TODO: Settings + E2EE vault screenshot
-- TODO: Mobile notification screenshot
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/b0fb9bd5-1d38-4616-bae2-f4e62827d27e" width="700"/>
+</p>
 
----
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/a0c6e7ae-276e-4bc5-8550-90d5df98a851" width="700"/>
+</p>
+
+<p align="center">
+  <img src="https://github.com/ismailmohammad/Stokely/blob/main/stokely-frontend/src/assets/mockups.png" width="700"/>
+</p>
+
+
 
 ## Current Feature Set
 
