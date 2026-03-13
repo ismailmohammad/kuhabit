@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -7,11 +7,13 @@ import { clearUserInfo, setUserInfo } from '../redux/userSlice';
 import type { RootState } from '../redux/store';
 import type { PushSubscriptionDevice, UserSession } from '../types/habit';
 import { syncPushSubscriptionOnDevice } from '../utils/pushNotifications';
+import { useE2EE } from '../context/E2EEContext';
+import { generateSalt, deriveKey, makeVerifier, checkVerifier, encrypt, decryptRecursively, isEncrypted } from '../utils/e2ee';
 import './SettingsModal.css';
 
-type Props = { onClose: () => void };
+type Props = { onClose: () => void; initialSection?: 'e2ee' };
 
-export default function SettingsModal({ onClose }: Props) {
+export default function SettingsModal({ onClose, initialSection }: Props) {
     const dispatch = useDispatch();
     const navigate = useNavigate();
     const userInfo = useSelector((state: RootState) => state.user.userInfo);
@@ -77,6 +79,31 @@ export default function SettingsModal({ onClose }: Props) {
     const [pushLoading, setPushLoading] = useState(false);
     const [pushSyncLoading, setPushSyncLoading] = useState(false);
     const [subscriptions, setSubscriptions] = useState<PushSubscriptionDevice[]>([]);
+
+    // E2EE
+    const e2eeSectionRef = useRef<HTMLElement>(null);
+    const {
+        key: e2eeKey,
+        isUnlocked,
+        unlock: e2eeUnlock,
+        lock: e2eeLock,
+    } = useE2EE();
+    const [e2eePassphrase, setE2EEPassphrase] = useState('');
+    const [e2eeConfirm, setE2EEConfirm] = useState('');
+    const [e2eeLoading, setE2EELoading] = useState(false);
+    const [e2eeShowEnable, setE2EEShowEnable] = useState(false);
+    const [e2eeShowChange, setE2EEShowChange] = useState(false);
+    const [e2eeCurrentPass, setE2EECurrentPass] = useState('');
+    const [e2eeNewPass, setE2EENewPass] = useState('');
+    const [e2eeNewConfirm, setE2EENewConfirm] = useState('');
+    const [e2eeDisableStep, setE2EEDisableStep] = useState(false);
+    const [e2eeUnlockPass, setE2EEUnlockPass] = useState('');
+
+    useEffect(() => {
+        if (initialSection === 'e2ee' && e2eeSectionRef.current) {
+            e2eeSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }, [initialSection]);
 
     const loadSubscriptions = async () => {
         setPushLoading(true);
@@ -240,6 +267,115 @@ export default function SettingsModal({ onClose }: Props) {
         }
     };
 
+    const handleE2EEEnable = async () => {
+        if (!userInfo || e2eePassphrase !== e2eeConfirm) { toast.error('Passphrases do not match'); return; }
+        if (e2eePassphrase.length < 8) { toast.error('Passphrase must be at least 8 characters'); return; }
+        setE2EELoading(true);
+        try {
+            const salt = generateSalt();
+            const key = await deriveKey(e2eePassphrase, salt);
+            const verifier = await makeVerifier(key);
+            const habits = await api.habits.list('all');
+            const encryptedHabits = await Promise.all(habits.map(async h => ({
+                id: h.id,
+                name: isEncrypted(h.name) ? h.name : await encrypt(key, h.name),
+                notes: h.notes ? (isEncrypted(h.notes) ? h.notes : await encrypt(key, h.notes)) : h.notes,
+            })));
+            const enableRes = await api.e2ee.enable({ salt, verifier, habits: encryptedHabits });
+            if (!enableRes.enabled) {
+                throw new Error('E2EE was not persisted on the server');
+            }
+            await e2eeUnlock(key);
+            dispatch(setUserInfo({ ...userInfo, e2eeEnabled: true, e2eeSetupPrompt: false }));
+            setE2EEPassphrase(''); setE2EEConfirm(''); setE2EEShowEnable(false);
+            toast.success('End-to-end encryption is now enabled for your account');
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : 'Failed to enable E2EE');
+        } finally {
+            setE2EELoading(false);
+        }
+    };
+
+    const handleE2EEUnlock = async () => {
+        if (!e2eeUnlockPass) return;
+        setE2EELoading(true);
+        try {
+            const status = await api.e2ee.status();
+            if (!status.enabled) { toast.error('E2EE vault is not configured'); return; }
+            if (!status.salt || !status.verifier) { toast.error('Vault data incomplete — please re-enable E2EE'); return; }
+            const key = await deriveKey(e2eeUnlockPass, status.salt);
+            const ok = await checkVerifier(key, status.verifier);
+            if (!ok) { toast.error('Incorrect passphrase'); return; }
+            await e2eeUnlock(key);
+            setE2EEUnlockPass('');
+            toast.success('Vault unlocked');
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : 'Failed to unlock vault');
+        } finally {
+            setE2EELoading(false);
+        }
+    };
+
+    const handleE2EEChangePassphrase = async () => {
+        if (!userInfo || !e2eeKey) return;
+        if (e2eeNewPass !== e2eeNewConfirm) { toast.error('New passphrases do not match'); return; }
+        if (e2eeNewPass.length < 8) { toast.error('Passphrase must be at least 8 characters'); return; }
+        setE2EELoading(true);
+        try {
+            const status = await api.e2ee.status();
+            if (!status.salt || !status.verifier) { toast.error('Vault data incomplete'); return; }
+            const currentKey = await deriveKey(e2eeCurrentPass, status.salt);
+            const valid = await checkVerifier(currentKey, status.verifier);
+            if (!valid) { toast.error('Current passphrase is incorrect'); return; }
+            const newSalt = generateSalt();
+            const newKey = await deriveKey(e2eeNewPass, newSalt);
+            const newVerifier = await makeVerifier(newKey);
+            const habits = await api.habits.list('all');
+            const encryptedHabits = habits.filter(h => isEncrypted(h.name) || isEncrypted(h.notes));
+            const decryptedHabits = await Promise.all(encryptedHabits.map(async h => ({
+                id: h.id,
+                name: isEncrypted(h.name) ? await decryptRecursively(e2eeKey, h.name) : h.name,
+                notes: isEncrypted(h.notes) ? await decryptRecursively(e2eeKey, h.notes) : h.notes,
+            })));
+            const reencryptedHabits = await Promise.all(decryptedHabits.map(async h => ({
+                id: h.id,
+                name: await encrypt(newKey, h.name),
+                notes: h.notes ? await encrypt(newKey, h.notes) : h.notes,
+            })));
+            await api.e2ee.changePassphrase({ salt: newSalt, verifier: newVerifier, habits: reencryptedHabits });
+            await e2eeUnlock(newKey);
+            setE2EECurrentPass(''); setE2EENewPass(''); setE2EENewConfirm(''); setE2EEShowChange(false);
+            toast.success('Vault passphrase updated');
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : 'Failed to change passphrase');
+        } finally {
+            setE2EELoading(false);
+        }
+    };
+
+    const handleE2EEDisable = async () => {
+        if (!userInfo || !e2eeKey) return;
+        setE2EELoading(true);
+        try {
+            const habits = await api.habits.list('all');
+            const encryptedHabits = habits.filter(h => isEncrypted(h.name) || isEncrypted(h.notes));
+            const decryptedHabits = await Promise.all(encryptedHabits.map(async h => ({
+                id: h.id,
+                name: isEncrypted(h.name) ? await decryptRecursively(e2eeKey, h.name) : h.name,
+                notes: isEncrypted(h.notes) ? await decryptRecursively(e2eeKey, h.notes) : h.notes,
+            })));
+            await api.e2ee.disable(decryptedHabits);
+            await e2eeLock();
+            dispatch(setUserInfo({ ...userInfo, e2eeEnabled: false, e2eeSetupPrompt: false }));
+            setE2EEDisableStep(false);
+            toast.success('End-to-end encryption disabled');
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : 'Failed to disable E2EE');
+        } finally {
+            setE2EELoading(false);
+        }
+    };
+
     const renderSessionDevice = (ua: string): string => {
         if (/iphone/i.test(ua)) return 'iPhone';
         if (/ipad/i.test(ua)) return 'iPad';
@@ -387,6 +523,149 @@ export default function SettingsModal({ onClose }: Props) {
                             disabled={dailySparkLoading}
                         />
                     </label>
+                </section>
+
+                {/* End-to-End Encryption */}
+                <section className="settings-section" ref={e2eeSectionRef}>
+                    <h3 className="settings-section-title">End-to-End Encryption</h3>
+                    {!userInfo?.e2eeEnabled ? (
+                        <>
+                            <p className="settings-desc">Encrypts habit names and notes account-wide. The server never sees your data in plaintext.</p>
+                            <p className="settings-desc" style={{ color: '#f0a66a' }}>⚠ Push notification reminders will show generic text when E2EE is enabled.</p>
+                            <p className="settings-desc" style={{ color: '#f0a66a' }}>⚠ Your E2EE passphrase cannot be recovered. If old data was encrypted with an unknown/old key, that data may stay unreadable.</p>
+                            {!e2eeShowEnable ? (
+                                <button className="settings-btn settings-btn--primary" onClick={() => setE2EEShowEnable(true)}>
+                                    Enable E2EE
+                                </button>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                    <input
+                                        type="password"
+                                        className="settings-input"
+                                        placeholder="Vault passphrase (min 8 chars)"
+                                        value={e2eePassphrase}
+                                        onChange={e => setE2EEPassphrase(e.target.value)}
+                                        autoComplete="new-password"
+                                    />
+                                    <input
+                                        type="password"
+                                        className="settings-input"
+                                        placeholder="Confirm passphrase"
+                                        value={e2eeConfirm}
+                                        onChange={e => setE2EEConfirm(e.target.value)}
+                                        autoComplete="new-password"
+                                    />
+                                    <div className="delete-actions">
+                                        <button className="settings-btn settings-btn--secondary" onClick={() => { setE2EEShowEnable(false); setE2EEPassphrase(''); setE2EEConfirm(''); }}>
+                                            Cancel
+                                        </button>
+                                        <button
+                                            className="settings-btn settings-btn--primary"
+                                            onClick={() => void handleE2EEEnable()}
+                                            disabled={e2eeLoading || e2eePassphrase.length < 8 || e2eePassphrase !== e2eeConfirm}
+                                        >
+                                            {e2eeLoading ? 'Setting up encryption…' : 'Enable'}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    ) : isUnlocked ? (
+                        <>
+                            <p className="settings-desc">
+                                <span className="settings-session-current" style={{ marginRight: '0.5rem' }}>Active</span>
+                                Habit names and notes are encrypted for your whole account.
+                            </p>
+                            {!e2eeShowChange ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                    <button className="settings-btn settings-btn--secondary" onClick={() => setE2EEShowChange(true)}>
+                                        Change Passphrase
+                                    </button>
+                                    <button className="settings-btn settings-btn--secondary" onClick={() => void e2eeLock()}>
+                                        Lock Vault
+                                    </button>
+                                    {!e2eeDisableStep ? (
+                                        <button className="settings-btn settings-btn--danger" onClick={() => setE2EEDisableStep(true)}>
+                                            Disable Encryption
+                                        </button>
+                                    ) : (
+                                        <div className="delete-confirm-box">
+                                            <p className="delete-warning">⚠️ This will decrypt your account data on the server. Are you sure?</p>
+                                            <div className="delete-actions">
+                                                <button className="settings-btn settings-btn--secondary" onClick={() => setE2EEDisableStep(false)}>Cancel</button>
+                                                <button className="settings-btn settings-btn--danger" disabled={e2eeLoading} onClick={() => void handleE2EEDisable()}>
+                                                    {e2eeLoading ? 'Disabling…' : 'Confirm Disable'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                    <input
+                                        type="password"
+                                        className="settings-input"
+                                        placeholder="Current passphrase"
+                                        value={e2eeCurrentPass}
+                                        onChange={e => setE2EECurrentPass(e.target.value)}
+                                        autoComplete="current-password"
+                                    />
+                                    <input
+                                        type="password"
+                                        className="settings-input"
+                                        placeholder="New passphrase (min 8 chars)"
+                                        value={e2eeNewPass}
+                                        onChange={e => setE2EENewPass(e.target.value)}
+                                        autoComplete="new-password"
+                                    />
+                                    <input
+                                        type="password"
+                                        className="settings-input"
+                                        placeholder="Confirm new passphrase"
+                                        value={e2eeNewConfirm}
+                                        onChange={e => setE2EENewConfirm(e.target.value)}
+                                        autoComplete="new-password"
+                                    />
+                                    <div className="delete-actions">
+                                        <button className="settings-btn settings-btn--secondary" onClick={() => { setE2EEShowChange(false); setE2EECurrentPass(''); setE2EENewPass(''); setE2EENewConfirm(''); }}>
+                                            Cancel
+                                        </button>
+                                        <button
+                                            className="settings-btn settings-btn--primary"
+                                            onClick={() => void handleE2EEChangePassphrase()}
+                                            disabled={e2eeLoading || !e2eeCurrentPass || e2eeNewPass.length < 8 || e2eeNewPass !== e2eeNewConfirm}
+                                        >
+                                            {e2eeLoading ? 'Re-encrypting…' : 'Update Passphrase'}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        <>
+                            <p className="settings-desc">
+                                <span style={{ color: '#f0a66a', marginRight: '0.5rem' }}>Vault is locked</span>
+                                Enter your passphrase to manage E2EE settings.
+                            </p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                <input
+                                    type="password"
+                                    className="settings-input"
+                                    placeholder="Vault passphrase"
+                                    value={e2eeUnlockPass}
+                                    onChange={e => setE2EEUnlockPass(e.target.value)}
+                                    autoComplete="current-password"
+                                />
+                                <button
+                                    className="settings-btn settings-btn--primary"
+                                    onClick={() => void handleE2EEUnlock()}
+                                    disabled={e2eeLoading || !e2eeUnlockPass}
+                                >
+                                    {e2eeLoading ? 'Unlocking…' : 'Unlock Vault'}
+                                </button>
+                            </div>
+                        </>
+                    )}
                 </section>
 
                 {/* Export Data */}

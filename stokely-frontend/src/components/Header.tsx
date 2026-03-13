@@ -8,6 +8,8 @@ import toast from "react-hot-toast";
 import type { RootState } from "../redux/store";
 import { useState, useEffect, useRef } from "react";
 import SettingsModal from "./SettingsModal";
+import VaultUnlockModal from "./VaultUnlockModal";
+import { useE2EE } from "../context/E2EEContext";
 
 const AppHeader = styled.header`
     display: flex;
@@ -152,8 +154,10 @@ const Header = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const userInfo = useSelector((state: RootState) => state.user.userInfo);
+    const { isUnlocked, lock, lockAndForget } = useE2EE();
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const [vaultUnlockOpen, setVaultUnlockOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const onDashboardRoute = location.pathname === '/dashboard' || location.pathname.startsWith('/dashboard/');
 
@@ -174,6 +178,7 @@ const Header = () => {
         } catch {
             // ignore
         }
+        await lockAndForget();
         dispatch(clearUserInfo());
         toast.success("Logged out");
         navigate("/");
@@ -194,6 +199,28 @@ const Header = () => {
                         <>
                             {!onDashboardRoute && (
                                 <Link to="/dashboard"><NavBtn>Dashboard</NavBtn></Link>
+                            )}
+                            {userInfo.e2eeEnabled && (
+                                isUnlocked ? (
+                                    <NavBtn
+                                        onClick={() => void (async () => {
+                                            await lock();
+                                            toast.success('Vault locked');
+                                        })()}
+                                        title="Vault is unlocked — click to lock"
+                                        style={{ color: '#2dca8e', borderColor: '#2dca8e' }}
+                                    >
+                                        🔓 Vault
+                                    </NavBtn>
+                                ) : (
+                                    <NavBtn
+                                        onClick={() => setVaultUnlockOpen(true)}
+                                        title="Vault is locked — click to unlock"
+                                        style={{ color: '#f0a66a', borderColor: '#f0a66a' }}
+                                    >
+                                        🔒 Vault
+                                    </NavBtn>
+                                )
                             )}
                             <DropdownWrap ref={dropdownRef}>
                                 <NavBtn onClick={() => setDropdownOpen(p => !p)}>
@@ -219,6 +246,7 @@ const Header = () => {
             </AppHeader>
 
             {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+            {vaultUnlockOpen && !isUnlocked && <VaultUnlockModal onClose={() => setVaultUnlockOpen(false)} />}
         </>
     );
 };

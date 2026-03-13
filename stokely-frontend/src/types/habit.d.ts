@@ -12,6 +12,7 @@ export interface HabitType {
     hasFreeze: boolean;
     frozenToday: boolean;
     createdAt: string;
+    encrypted?: boolean;      // client-side: true when the habit's name/notes are/were E2EE-encrypted
 }
 
 export interface UserInfo {
@@ -22,6 +23,8 @@ export interface UserInfo {
     emailPending?: boolean;
     showWelcome?: boolean;
     dailySparkEnabled?: boolean;
+    e2eeEnabled?: boolean;
+    e2eeSetupPrompt?: boolean;
 }
 
 export type DashboardView = 'daily' | 'all' | 'calendar' | 'streak' | 'achievements';

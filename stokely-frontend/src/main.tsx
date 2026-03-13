@@ -14,6 +14,22 @@ import ForgotPasswordPage from './components/UserActionPages/ForgotPasswordPage.
 import ResetPasswordPage from './components/UserActionPages/ResetPasswordPage.tsx'
 import VerifyEmailPage from './components/UserActionPages/VerifyEmailPage.tsx'
 import { Toaster } from 'react-hot-toast'
+import { E2EEProvider } from './context/E2EEContext.tsx'
+
+// Trusted Types compatibility bootstrap (safe no-op on unsupported browsers).
+if (typeof window !== 'undefined') {
+  const tt = (window as Window & { trustedTypes?: { createPolicy?: (name: string, rules: { createHTML?: (input: string) => string; createScriptURL?: (input: string) => string; }) => unknown } }).trustedTypes;
+  if (tt?.createPolicy) {
+    try {
+      tt.createPolicy('stokely', {
+        createHTML: input => input,
+        createScriptURL: input => input,
+      });
+    } catch {
+      // Policy already exists or browser blocks duplicate policy creation.
+    }
+  }
+}
 
 const router = createBrowserRouter([
   {
@@ -34,14 +50,16 @@ const router = createBrowserRouter([
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <Provider store={store}>
-    <React.StrictMode>
-      <Toaster
-        position="bottom-left"
-        toastOptions={{
-          style: { background: '#1e1e1e', color: '#fff', border: '1px solid #333' },
-        }}
-      />
-      <RouterProvider router={router} />
-    </React.StrictMode>
+    <E2EEProvider>
+      <React.StrictMode>
+        <Toaster
+          position="bottom-left"
+          toastOptions={{
+            style: { background: '#1e1e1e', color: '#fff', border: '1px solid #333' },
+          }}
+        />
+        <RouterProvider router={router} />
+      </React.StrictMode>
+    </E2EEProvider>
   </Provider>,
 )

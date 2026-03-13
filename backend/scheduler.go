@@ -42,6 +42,30 @@ func runReminderCheck(now time.Time) {
 
 	var habits []Habit
 	db.Where("reminder_time = ?", currentTime).Find(&habits)
+	if len(habits) == 0 {
+		return
+	}
+
+	userIDs := make([]string, 0, len(habits))
+	seenUsers := map[string]struct{}{}
+	for _, h := range habits {
+		if _, exists := seenUsers[h.UserID]; exists {
+			continue
+		}
+		seenUsers[h.UserID] = struct{}{}
+		userIDs = append(userIDs, h.UserID)
+	}
+
+	type userE2EEFlag struct {
+		ID          string `gorm:"column:id"`
+		E2EEEnabled bool   `gorm:"column:e2ee_enabled"`
+	}
+	var userFlags []userE2EEFlag
+	db.Model(&User{}).Select("id, e2ee_enabled").Where("id IN ?", userIDs).Find(&userFlags)
+	e2eeByUser := make(map[string]bool, len(userFlags))
+	for _, uf := range userFlags {
+		e2eeByUser[uf.ID] = uf.E2EEEnabled
+	}
 
 	for _, h := range habits {
 		if !containsDay(h.Recurrence, todayKey) {
@@ -62,8 +86,18 @@ func runReminderCheck(now time.Time) {
 
 		var subs []PushSubscription
 		db.Where("user_id = ? AND enabled = true", h.UserID).Find(&subs)
+
+		body := "Time for your Habit Check-In"
+		if !e2eeByUser[h.UserID] {
+			habitName := h.Name
+			if strings.HasPrefix(habitName, "e2ee:v1:") {
+				habitName = "your habit"
+			}
+			body = fmt.Sprintf("%s", habitName)
+		}
+
 		for _, sub := range subs {
-			if _, err := sendPushAndRecord(sub, "Habit Reminder", fmt.Sprintf("Time to: %s", h.Name)); err != nil {
+			if _, err := sendPushAndRecord(sub, "Habit Check-in", body); err != nil {
 				log.Printf("Push failed for sub %d: %v", sub.ID, err)
 			}
 		}

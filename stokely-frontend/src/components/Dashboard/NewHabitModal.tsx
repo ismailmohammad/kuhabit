@@ -4,6 +4,11 @@ import './NewHabitModal.css';
 import { HabitType } from "../../types/habit";
 import { HABIT_ICONS } from "../../utils/habitIcons";
 import { syncPushSubscriptionOnDevice } from "../../utils/pushNotifications";
+import { useSelector } from "react-redux";
+import type { RootState } from "../../redux/store";
+import { useE2EE } from "../../context/E2EEContext";
+import { encrypt, isEncrypted } from "../../utils/e2ee";
+import SettingsModal from "../SettingsModal";
 
 import CurbCube from '../../assets/cube-logo-red.png';
 import BuildCube from '../../assets/cube-logo-green.png';
@@ -124,6 +129,8 @@ function IconPicker({ selected, onSelect }: { selected: string; onSelect: (name:
 
 const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToEdit }: HabitModalProps) => {
     const isEdit = habitToEdit !== null;
+    const userInfo = useSelector((state: RootState) => state.user.userInfo);
+    const { key: e2eeKey, isUnlocked } = useE2EE();
 
     // Animation state
     const [mounted, setMounted] = useState(false);
@@ -142,6 +149,8 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
     const [useEndDate, setUseEndDate] = useState(false);
     const [notes, setNotes] = useState('');
     const [reminderTime, setReminderTime] = useState('');
+
+    const [showE2EESettings, setShowE2EESettings] = useState(false);
 
     // Danger zone confirm state
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -226,7 +235,8 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
         return ALL_DAYS.filter(d => customDays[d]).join('-') || 'Su';
     };
 
-    const todayISO = new Date().toISOString().split('T')[0];
+    const d = new Date();
+    const todayISO = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -245,17 +255,30 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
             }
         }
 
+        let submitName = name;
+        let submitNotes = notes;
+
+        if (userInfo?.e2eeEnabled && (!isUnlocked || !e2eeKey)) {
+            toast.error('Unlock vault before saving while E2EE is enabled');
+            return;
+        }
+
+        if (userInfo?.e2eeEnabled && e2eeKey) {
+            submitName = isEncrypted(name) ? name : await encrypt(e2eeKey, name);
+            submitNotes = notes ? (isEncrypted(notes) ? notes : await encrypt(e2eeKey, notes)) : notes;
+        }
+
         if (isEdit && habitToEdit) {
             onUpdate(habitToEdit.id, {
-                name, recurrence, positiveType,
-                icon, notes,
+                name: submitName, recurrence, positiveType,
+                icon, notes: submitNotes,
                 reminderTime: utcReminder,
                 recurrenceEnd: endDate,
             });
         } else {
             onCreate({
-                name, recurrence, positiveType,
-                icon, notes,
+                name: submitName, recurrence, positiveType,
+                icon, notes: submitNotes,
                 reminderTime: utcReminder,
                 recurrenceEnd: endDate,
             });
@@ -276,6 +299,7 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
     const SelectedIcon = icon ? HABIT_ICONS[icon] : null;
 
     return (
+        <>
         <div className={`modal-overlay${closing ? ' modal-overlay--out' : ''}`} onClick={handleClose}>
             <div className={`modal-box${closing ? ' modal-box--out' : ''}`} onClick={e => e.stopPropagation()}>
                 <div className="modal-header">
@@ -433,7 +457,10 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
                         </>
                     )}
 
-                    <button className="modal-submit" type="submit">
+                    <button
+                        className="modal-submit"
+                        type="submit"
+                    >
                         {isEdit ? 'Save Changes' : 'Add Habit'}
                     </button>
 
@@ -540,18 +567,42 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
                         </div>
                     )}
 
-                    {/* E2E Encryption placeholder */}
+                    {/* E2EE section — always shown at the bottom */}
                     <div className="e2e-placeholder">
                         <div className="e2e-divider" />
-                        <p className="e2e-label">End-to-End Encryption <span className="e2e-soon">Coming Soon</span></p>
-                        <p className="e2e-desc">Your notes and habit names will be encrypted client-side before leaving your device.</p>
-                        <button type="button" disabled className="modal-submit modal-submit--disabled">
-                            Enable Encryption
-                        </button>
+                        {!userInfo?.e2eeEnabled ? (
+                            <>
+                                <p className="e2e-label" style={{ color: '#888', margin: 0 }}>
+                                    🔐 End-to-End Encryption
+                                </p>
+                                <p style={{ fontSize: '0.8rem', color: '#666', margin: '0.25rem 0 0.5rem' }}>
+                                    Enable account-wide encryption in Settings.
+                                </p>
+                                <button
+                                    type="button"
+                                    className="e2e-setup-btn"
+                                    onClick={() => setShowE2EESettings(true)}
+                                >
+                                    Set up in Settings →
+                                </button>
+                            </>
+                        ) : isUnlocked ? (
+                            <p className="e2e-label" style={{ color: '#2dca8e', margin: 0 }}>
+                                🔐 E2EE is enabled. This habit will be encrypted on save.
+                            </p>
+                        ) : (
+                            <p className="e2e-label" style={{ color: '#f0a66a', margin: 0 }}>
+                                🔒 Vault locked — unlock vault in the header to enable encryption
+                            </p>
+                        )}
                     </div>
+
                 </form>
             </div>
         </div>
+
+        {showE2EESettings && <SettingsModal onClose={() => setShowE2EESettings(false)} initialSection="e2ee" />}
+        </>
     );
 };
 

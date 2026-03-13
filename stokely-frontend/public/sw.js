@@ -14,9 +14,9 @@ self.addEventListener('push', event => {
     event.waitUntil(
         self.registration.showNotification(title, {
             body,
-            icon: '/icon-192.png',
-            badge: '/icon-192.png',
-            tag: data.tag || 'stokely-reminder',
+            icon: '/notif-kindling-hands.png?v=4',
+            badge: '/icon-192.png?v=4',
+            tag: data.tag || 'stokely-reminder-v4',
             renotify: true,
             data: { url },
         })

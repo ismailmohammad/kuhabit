@@ -461,11 +461,8 @@ input:checked + .slider:before {
     margin: -0.25rem 0 0;
 }
 
-/* E2E placeholder */
+/* E2E section */
 .e2e-placeholder {
-    opacity: 0.35;
-    pointer-events: none;
-    user-select: none;
 }
 .e2e-divider {
     height: 1px;
@@ -496,6 +493,21 @@ input:checked + .slider:before {
     font-size: 0.8rem;
     color: #555;
     margin: 0 0 0.75rem;
+}
+.e2e-setup-btn {
+    background: #2a2a2a;
+    color: #aaa;
+    border: 1px solid #444;
+    border-radius: 6px;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.e2e-setup-btn:hover {
+    background: #333;
+    color: #ccc;
+    border-color: #555;
 }
 .modal-submit--disabled {
     background: #333;
