@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { api } from '../../api/api';
@@ -12,6 +12,12 @@ export default function ResetPasswordPage() {
     const [newPw, setNewPw] = useState('');
     const [confirmPw, setConfirmPw] = useState('');
     const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        if (!token || !window.location.search) return;
+        // Remove token from URL/history after reading it.
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }, [token]);
 
     if (!token) {
         return (
