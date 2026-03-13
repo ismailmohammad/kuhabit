@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"regexp"
@@ -35,7 +36,7 @@ var authLimiterJanitorOnce sync.Once
 
 const authRateWindow = time.Minute
 const authRateMax = 10
-const forgotPasswordGenericMessage = "If an account exists, a password reset email has been sent"
+const forgotPasswordGenericMessage = "If an account exists, a password reset email has been sent" // #nosec G101 -- user-facing generic message, not a credential
 
 func startAuthRateLimiterJanitor() {
 	ticker := time.NewTicker(5 * time.Minute)
@@ -916,7 +917,10 @@ func createHabitLog(c *gin.Context) {
 	var input struct {
 		Date string `json:"date"`
 	}
-	c.ShouldBindJSON(&input)
+	if err := c.ShouldBindJSON(&input); err != nil && !errors.Is(err, io.EOF) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		return
+	}
 
 	logDate, err := parseDateOrToday(input.Date)
 	if err != nil {
@@ -951,7 +955,10 @@ func deleteHabitLog(c *gin.Context) {
 	var input struct {
 		Date string `json:"date"`
 	}
-	c.ShouldBindJSON(&input)
+	if err := c.ShouldBindJSON(&input); err != nil && !errors.Is(err, io.EOF) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		return
+	}
 
 	logDate, err := parseDateOrToday(input.Date)
 	if err != nil {
@@ -1412,7 +1419,15 @@ func handlePushUnsubscribe(c *gin.Context) {
 	var input struct {
 		Endpoint string `json:"endpoint"`
 	}
-	c.ShouldBindJSON(&input)
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		return
+	}
+	input.Endpoint = strings.TrimSpace(input.Endpoint)
+	if input.Endpoint == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Endpoint required"})
+		return
+	}
 	db.Where("user_id = ? AND endpoint = ?", user.ID, input.Endpoint).Delete(&PushSubscription{})
 	c.JSON(http.StatusOK, gin.H{"message": "Unsubscribed"})
 }
