@@ -87,14 +87,7 @@ func runReminderCheck(now time.Time) {
 		var subs []PushSubscription
 		db.Where("user_id = ? AND enabled = true", h.UserID).Find(&subs)
 
-		body := "Time for your Habit Check-In"
-		if !e2eeByUser[h.UserID] {
-			habitName := h.Name
-			if strings.HasPrefix(habitName, "e2ee:v1:") {
-				habitName = "your habit"
-			}
-			body = fmt.Sprintf("%s", habitName)
-		}
+		body := reminderBody(e2eeByUser[h.UserID], h.Name)
 
 		for _, sub := range subs {
 			if _, err := sendPushAndRecord(sub, "Habit Check-in", body); err != nil {
@@ -102,6 +95,16 @@ func runReminderCheck(now time.Time) {
 			}
 		}
 	}
+}
+
+func reminderBody(e2eeEnabled bool, habitName string) string {
+	if e2eeEnabled {
+		return "Time for your Habit Check-In"
+	}
+	if strings.HasPrefix(habitName, "e2ee:v1:") {
+		return "your habit"
+	}
+	return fmt.Sprintf("%s", habitName)
 }
 
 func sendPushAndRecord(sub PushSubscription, title, body string) (int, error) {
