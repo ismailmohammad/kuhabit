@@ -160,7 +160,7 @@ npm audit --omit=dev
 
 ## Deployment
 
-Thiss is due to the current VM limitation. With enough RAM and CPU, ideally build on the machine or through Github Actions/other CI tooling
+This is due to current VM resource limits. With enough RAM/CPU, you can also build directly on the VM or via CI.
 
 Build and push images:
 
@@ -174,6 +174,39 @@ Run production compose on server:
 docker compose -f docker-compose.prod.yml pull
 docker compose -f docker-compose.prod.yml up -d
 ```
+
+## GitHub Actions Prod Deploy (main branch)
+
+Workflow: `.github/workflows/prod-ci-cd.yml`
+
+On every commit to `main`, it will:
+
+1. Run backend tests.
+2. Run frontend unit tests + build + Playwright smoke tests.
+3. Run SQL injection guard + `npm audit --omit=dev`.
+4. Build/push Docker images to Docker Hub.
+5. SSH into your VM and run `docker compose pull && docker compose up -d`.
+
+### Required GitHub Repository Secrets
+
+| Secret | Purpose |
+|---|---|
+| `DOCKERHUB_USERNAME` | Docker Hub username used for image tags/login |
+| `DOCKERHUB_TOKEN` | Docker Hub access token (write permissions) |
+| `PROD_SSH_PRIVATE_KEY` | Private key used by GitHub Actions to SSH into VM |
+| `PROD_SSH_KNOWN_HOSTS` | Host key line(s) from `ssh-keyscan -H <host>` |
+| `PROD_SSH_HOST` | Production VM hostname/IP |
+| `PROD_SSH_USER` | SSH user (for example `ubuntu`) |
+| `PROD_SSH_PORT` | SSH port (optional, defaults to 22 if blank) |
+| `PROD_DEPLOY_PATH` | Path to repo on VM (for example `~/kuhabit`) |
+
+### VM Prerequisites
+
+- Repo exists at `PROD_DEPLOY_PATH` and has `docker-compose.prod.yml`.
+- Docker + Docker Compose plugin installed.
+- `.env` file configured on VM with production values.
+- VM can pull images from Docker Hub.
+- SSH user has permission to run Docker commands.
 
 ---
 
