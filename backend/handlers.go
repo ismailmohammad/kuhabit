@@ -31,12 +31,28 @@ type authBucket struct {
 	windowEnd time.Time
 }
 
+type loginBucket struct {
+	mu        sync.Mutex
+	count     int
+	windowEnd time.Time
+	lockUntil time.Time
+}
+
 var authLimitMap sync.Map
 var authLimiterJanitorOnce sync.Once
+var loginIPLimitMap sync.Map
+var loginAccountLimitMap sync.Map
+var loginLimiterJanitorOnce sync.Once
 
 const authRateWindow = time.Minute
 const authRateMax = 10
 const forgotPasswordGenericMessage = "If an account exists, a password reset email has been sent" // #nosec G101 -- user-facing generic message, not a credential
+const emailResendCooldown = 60 * time.Second
+const loginFailureWindow = 10 * time.Minute
+const loginIPMaxFailures = 25
+const loginAccountMaxFailures = 8
+const loginIPLockout = 10 * time.Minute
+const loginAccountLockout = 15 * time.Minute
 
 func startAuthRateLimiterJanitor() {
 	ticker := time.NewTicker(5 * time.Minute)
@@ -75,6 +91,113 @@ func checkAuthRateLimit(c *gin.Context) bool {
 	return b.count <= authRateMax
 }
 
+func startLoginLimiterJanitor() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for now := range ticker.C {
+		cleanupLoginLimiterMap(&loginIPLimitMap, now)
+		cleanupLoginLimiterMap(&loginAccountLimitMap, now)
+	}
+}
+
+func cleanupLoginLimiterMap(m *sync.Map, now time.Time) {
+	m.Range(func(key, value any) bool {
+		b, ok := value.(*loginBucket)
+		if !ok {
+			m.Delete(key)
+			return true
+		}
+		b.mu.Lock()
+		windowExpired := now.After(b.windowEnd.Add(2 * loginFailureWindow))
+		lockExpired := b.lockUntil.IsZero() || now.After(b.lockUntil.Add(2*loginAccountLockout))
+		b.mu.Unlock()
+		if windowExpired && lockExpired {
+			m.Delete(key)
+		}
+		return true
+	})
+}
+
+func loginIdentityKey(username string) string {
+	return strings.ToLower(strings.TrimSpace(username))
+}
+
+func getOrCreateLoginBucket(m *sync.Map, key string, now time.Time) *loginBucket {
+	val, _ := m.LoadOrStore(key, &loginBucket{windowEnd: now.Add(loginFailureWindow)})
+	return val.(*loginBucket)
+}
+
+func loginBucketLockRemaining(m *sync.Map, key string, now time.Time) time.Duration {
+	if key == "" {
+		return 0
+	}
+	val, ok := m.Load(key)
+	if !ok {
+		return 0
+	}
+	b, ok := val.(*loginBucket)
+	if !ok {
+		m.Delete(key)
+		return 0
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if now.Before(b.lockUntil) {
+		return b.lockUntil.Sub(now)
+	}
+	return 0
+}
+
+func recordFailure(m *sync.Map, key string, now time.Time, maxFailures int, lockout time.Duration) time.Duration {
+	if key == "" {
+		return 0
+	}
+	b := getOrCreateLoginBucket(m, key, now)
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if now.Before(b.lockUntil) {
+		return b.lockUntil.Sub(now)
+	}
+	if now.After(b.windowEnd) {
+		b.count = 0
+		b.windowEnd = now.Add(loginFailureWindow)
+	}
+	b.count++
+	if b.count >= maxFailures {
+		b.count = 0
+		b.lockUntil = now.Add(lockout)
+		return lockout
+	}
+	return 0
+}
+
+func loginLockoutRemaining(ip, username string, now time.Time) time.Duration {
+	ipRemaining := loginBucketLockRemaining(&loginIPLimitMap, strings.TrimSpace(ip), now)
+	accountRemaining := loginBucketLockRemaining(&loginAccountLimitMap, loginIdentityKey(username), now)
+	if accountRemaining > ipRemaining {
+		return accountRemaining
+	}
+	return ipRemaining
+}
+
+func recordLoginFailure(ip, username string, now time.Time) time.Duration {
+	loginLimiterJanitorOnce.Do(func() { go startLoginLimiterJanitor() })
+	ipRemaining := recordFailure(&loginIPLimitMap, strings.TrimSpace(ip), now, loginIPMaxFailures, loginIPLockout)
+	accountRemaining := recordFailure(&loginAccountLimitMap, loginIdentityKey(username), now, loginAccountMaxFailures, loginAccountLockout)
+	if accountRemaining > ipRemaining {
+		return accountRemaining
+	}
+	return ipRemaining
+}
+
+func clearLoginFailures(ip, username string) {
+	loginIPLimitMap.Delete(strings.TrimSpace(ip))
+	if key := loginIdentityKey(username); key != "" {
+		loginAccountLimitMap.Delete(key)
+	}
+}
+
 // ── Input Validators ──────────────────────────────────────────────────────────
 
 var validDayCodes = map[string]bool{
@@ -100,6 +223,14 @@ var reminderTimeRe = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d$`)
 
 func isValidReminderTime(t string) bool {
 	return t == "" || reminderTimeRe.MatchString(t)
+}
+
+func isValidTimeZone(tz string) bool {
+	if tz == "" {
+		return true
+	}
+	_, err := time.LoadLocation(tz)
+	return err == nil
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -148,6 +279,45 @@ func parseDateOrToday(dateStr string) (time.Time, error) {
 func hashEmailToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
+}
+
+func cooldownCeilSeconds(d time.Duration) int {
+	if d <= 0 {
+		return 0
+	}
+	secs := int(d / time.Second)
+	if d%time.Second != 0 {
+		secs++
+	}
+	if secs < 1 {
+		return 1
+	}
+	return secs
+}
+
+func resendCooldownRemaining(lastCreatedAt, now time.Time) time.Duration {
+	if lastCreatedAt.IsZero() {
+		return 0
+	}
+	nextAllowed := lastCreatedAt.Add(emailResendCooldown)
+	if !now.Before(nextAllowed) {
+		return 0
+	}
+	return nextAllowed.Sub(now)
+}
+
+func emailResendCooldownRemaining(userID, tokenType string, now time.Time) time.Duration {
+	var existing EmailToken
+	err := db.Where("user_id = ? AND type = ?", userID, tokenType).
+		Order("created_at desc").
+		First(&existing).Error
+	if err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Printf("email cooldown lookup failed for user=%s type=%s: %v", userID, tokenType, err)
+		}
+		return 0
+	}
+	return resendCooldownRemaining(existing.CreatedAt.UTC(), now.UTC())
 }
 
 // computeStreak counts consecutive completed (or frozen) scheduled days, ending at referenceDate.
@@ -219,6 +389,7 @@ func habitToResponse(h Habit, complete bool, streak int, hasFreeze bool, frozenT
 		RecurrenceEnd: h.RecurrenceEnd,
 		Notes:         h.Notes,
 		ReminderTime:  h.ReminderTime,
+		ReminderTZ:    h.ReminderTZ,
 		Streak:        streak,
 		HasFreeze:     hasFreeze,
 		FrozenToday:   frozenToday,
@@ -520,17 +691,37 @@ func handleLogin(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	now := time.Now().UTC()
+	if remaining := loginLockoutRemaining(c.ClientIP(), input.Username, now); remaining > 0 {
+		secs := cooldownCeilSeconds(remaining)
+		c.Header("Retry-After", strconv.Itoa(secs))
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": fmt.Sprintf("Too many login attempts. Try again in %d seconds", secs)})
+		return
+	}
 
 	var user User
 	if result := db.Where("username = ?", input.Username).First(&user); result.Error != nil {
+		if remaining := recordLoginFailure(c.ClientIP(), input.Username, now); remaining > 0 {
+			secs := cooldownCeilSeconds(remaining)
+			c.Header("Retry-After", strconv.Itoa(secs))
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": fmt.Sprintf("Too many login attempts. Try again in %d seconds", secs)})
+			return
+		}
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password)); err != nil {
+		if remaining := recordLoginFailure(c.ClientIP(), input.Username, now); remaining > 0 {
+			secs := cooldownCeilSeconds(remaining)
+			c.Header("Retry-After", strconv.Itoa(secs))
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": fmt.Sprintf("Too many login attempts. Try again in %d seconds", secs)})
+			return
+		}
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
 		return
 	}
+	clearLoginFailures(c.ClientIP(), input.Username)
 
 	if err := setAuthenticatedSession(c, user.ID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
@@ -767,6 +958,7 @@ func createHabit(c *gin.Context) {
 		RecurrenceEnd *time.Time `json:"recurrenceEnd"`
 		Notes         string     `json:"notes" binding:"max=2000"`
 		ReminderTime  string     `json:"reminderTime"`
+		ReminderTZ    string     `json:"reminderTz" binding:"max=64"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -776,9 +968,17 @@ func createHabit(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid recurrence format"})
 		return
 	}
+	input.ReminderTZ = strings.TrimSpace(input.ReminderTZ)
 	if !isValidReminderTime(input.ReminderTime) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid reminder time, expected HH:MM"})
 		return
+	}
+	if !isValidTimeZone(input.ReminderTZ) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid reminder timezone"})
+		return
+	}
+	if input.ReminderTime == "" {
+		input.ReminderTZ = ""
 	}
 
 	habit := Habit{
@@ -790,6 +990,7 @@ func createHabit(c *gin.Context) {
 		RecurrenceEnd: input.RecurrenceEnd,
 		Notes:         input.Notes,
 		ReminderTime:  input.ReminderTime,
+		ReminderTZ:    input.ReminderTZ,
 	}
 	db.Create(&habit)
 	c.JSON(http.StatusCreated, habitToResponse(habit, false, 0, false, false))
@@ -818,6 +1019,7 @@ func updateHabit(c *gin.Context) {
 		RecurrenceEnd *time.Time `json:"recurrenceEnd"`
 		Notes         *string    `json:"notes"`
 		ReminderTime  *string    `json:"reminderTime"`
+		ReminderTZ    *string    `json:"reminderTz"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -856,6 +1058,21 @@ func updateHabit(c *gin.Context) {
 			return
 		}
 		habit.ReminderTime = *input.ReminderTime
+		if *input.ReminderTime == "" {
+			habit.ReminderTZ = ""
+		}
+	}
+	if input.ReminderTZ != nil {
+		trimmed := strings.TrimSpace(*input.ReminderTZ)
+		if !isValidTimeZone(trimmed) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid reminder timezone"})
+			return
+		}
+		if habit.ReminderTime == "" {
+			habit.ReminderTZ = ""
+		} else {
+			habit.ReminderTZ = trimmed
+		}
 	}
 
 	// Backward compat: sync HabitLog when complete flag is toggled
@@ -1604,7 +1821,11 @@ func queueEmailVerification(userID, username, email string) error {
 		return err
 	}
 	verifyURL := appURL() + "/verify-email?token=" + token
-	return sendEmail(email, "Verify your Stokely email address", verifyEmailHTML(username, verifyURL))
+	if err := sendEmail(email, "Verify your Stokely email address", verifyEmailHTML(username, verifyURL)); err != nil {
+		db.Delete(&et)
+		return err
+	}
+	return nil
 }
 
 func handleSendVerificationEmail(c *gin.Context) {
@@ -1628,6 +1849,12 @@ func handleSendVerificationEmail(c *gin.Context) {
 	var existing User
 	if err := db.Where("email = ? AND email_verified = true AND id != ?", addr, user.ID).First(&existing).Error; err == nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "Email already in use"})
+		return
+	}
+	if remaining := emailResendCooldownRemaining(user.ID, "verify", time.Now().UTC()); remaining > 0 {
+		secs := cooldownCeilSeconds(remaining)
+		c.Header("Retry-After", strconv.Itoa(secs))
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": fmt.Sprintf("Please wait %d seconds before requesting another verification email", secs)})
 		return
 	}
 
@@ -1730,6 +1957,11 @@ func handleForgotPassword(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": forgotPasswordGenericMessage})
 		return
 	}
+	if remaining := emailResendCooldownRemaining(user.ID, "reset", time.Now().UTC()); remaining > 0 {
+		log.Printf("forgot-password cooldown active for user=%s remaining=%s", user.ID, remaining.String())
+		c.JSON(http.StatusOK, gin.H{"message": forgotPasswordGenericMessage})
+		return
+	}
 
 	// Delete any existing reset token for this user.
 	db.Where("user_id = ? AND type = ?", user.ID, "reset").Delete(&EmailToken{})
@@ -1754,6 +1986,7 @@ func handleForgotPassword(c *gin.Context) {
 	}
 	resetURL := appURL() + "/reset-password?token=" + token
 	if err := sendEmail(*user.Email, "Reset your Stokely password", resetPasswordHTML(user.Username, resetURL)); err != nil {
+		db.Delete(&et)
 		log.Printf("forgot-password email send failed for user=%s: %v", user.ID, err)
 		c.JSON(http.StatusOK, gin.H{"message": forgotPasswordGenericMessage})
 		return

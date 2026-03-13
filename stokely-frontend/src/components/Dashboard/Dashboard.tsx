@@ -1034,7 +1034,7 @@ export default function Dashboard() {
 
     const handleCreate = async (data: {
         name: string; recurrence: string; positiveType: boolean;
-        icon?: string; recurrenceEnd?: string | null; notes?: string; reminderTime?: string;
+        icon?: string; recurrenceEnd?: string | null; notes?: string; reminderTime?: string; reminderTz?: string;
     }) => {
         try {
             const newHabit = await api.habits.create(data);

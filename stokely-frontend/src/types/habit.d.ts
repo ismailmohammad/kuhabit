@@ -7,7 +7,8 @@ export interface HabitType {
     icon: string;
     recurrenceEnd?: string;   // ISO date string e.g. "2026-06-01T00:00:00Z"
     notes: string;
-    reminderTime: string;     // "HH:MM" UTC, "" = no reminder
+    reminderTime: string;     // "HH:MM" in reminder timezone (or legacy UTC when reminderTz is empty)
+    reminderTz?: string;
     streak: number;
     hasFreeze: boolean;
     frozenToday: boolean;
