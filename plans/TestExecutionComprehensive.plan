@@ -1,0 +1,340 @@
+# Stokely Comprehensive Test Plan
+
+## Purpose
+Create an execution-ready test strategy that can be run in phases as code stabilizes. This plan covers functional, security, privacy, E2EE, notification, and regression testing across backend and frontend.
+
+---
+
+## 1. Test Objectives
+
+- Validate core product behavior (auth, habits, streaks, reminders, settings).
+- Validate E2EE guarantees and vault behavior under normal and failure scenarios.
+- Validate security controls (session handling, CSRF, password flows, token handling, privacy minimization).
+- Validate security/privacy behavior (session handling, token hygiene, and minimized metadata retention).
+- Catch regressions caused by ongoing rapid iteration.
+
+---
+
+## 2. Scope
+
+### In Scope
+- Backend Go API (`/api/auth`, `/api/habits`, `/api/e2ee`, `/api/push`, `/api/sessions`, `/api/user`)
+- Frontend React app routes and critical user journeys
+- Service worker + push subscription flows
+- Session revocation and metadata minimization behavior
+- Critical frontend routes and user journeys
+
+### Out of Scope (for this cycle)
+- Native mobile wrappers
+- External provider SLA validation (SMTP/push gateway uptime)
+
+---
+
+## 3. Test Environments
+
+### Env A: Local Dev
+- Frontend via Vite
+- Backend via Go run
+- PostgreSQL (same schema as prod)
+- SMTP optional
+- Push optional (best-effort)
+
+### Env B: Docker Compose
+- Caddy + frontend + backend + DB
+- Production-like headers/cookies/routing behavior
+
+### Env C: Pre-Prod/Staging
+- TLS + production cookie settings
+- Realistic hostnames and origins
+- Final smoke before release
+
+---
+
+## 4. Execution Waves
+
+### Wave 1: Fast Regression Gate (every PR)
+- TypeScript build
+- Go format + compile/tests
+- SQL injection guard script
+- SAST quick pass (`gosec`)
+- Focused auth + habit API smoke tests
+- Core E2E smoke (happy-path login + dashboard load)
+
+### Wave 2: Feature Gate (daily)
+- Full API functional tests
+- E2EE lifecycle and vault lock/unlock scenarios
+- Session and password flow tests
+- Frontend route and interaction sanity checks
+- Full critical-path E2E suite
+
+### Wave 3: Pre-Release Gate
+- Full suite rerun in staging
+- Security/privacy verification checklist
+- Manual exploratory session
+
+---
+
+## 5. Detailed Test Matrix
+
+### 5.1 Authentication + Account
+
+1. Register with username/password (with and without email).
+2. Login success/failure.
+3. Logout current session.
+4. Change password:
+   - Current password required.
+   - Old sessions revoked.
+   - New current session issued.
+5. Forgot password:
+   - Generic response for existing/non-existing users.
+   - Reset token expiry handling.
+6. Reset password:
+   - Valid token success.
+   - Invalid/expired token rejection.
+7. Email verify:
+   - Send verification, verify token, duplicate handling.
+8. Delete account:
+   - Password required.
+   - Cascade data deletion validated.
+
+### 5.2 Sessions + Security
+
+1. List sessions returns current + others.
+2. Delete another session works; deleting current via endpoint blocked.
+3. Logout others preserves current session.
+4. CSRF enforcement:
+   - Mutating calls without token fail.
+   - Mutating calls with token succeed.
+5. Cookie behavior:
+   - Secure/SameSite expectations in release-like config.
+6. Metadata minimization:
+   - New sessions persist empty/blank IP + raw UA fields.
+   - Startup scrub clears legacy `user_sessions.ip_address`, `user_sessions.user_agent`, and `push_subscriptions.user_agent`.
+
+### 5.3 Habits + Logs + Streaks
+
+1. Create/update/delete habit with all fields:
+   - name, notes, recurrence, reminderTime, icon, recurrenceEnd
+2. Daily vs all vs calendar queries.
+3. Log complete/uncomplete by date.
+4. Duplicate log conflict behavior.
+5. Streak details endpoint correctness:
+   - current streak
+   - longest streak
+   - freeze-aware history
+6. Timezone/date-boundary regression:
+   - mark complete late local day; ensure correct calendar date interpretation.
+7. Archived behavior via recurrenceEnd.
+
+### 5.4 E2EE + Vault
+
+1. First prompt timing:
+   - shown after welcome dismissal, not before.
+2. Enable E2EE:
+   - server flag persists across refresh/login/device.
+   - habits encrypted once (no re-encryption stacking).
+3. Vault lock/unlock:
+   - lock fetches encrypted state presentation.
+   - unlock decrypts displayed content with correct passphrase.
+4. Incorrect passphrase:
+   - unlock fails gracefully.
+5. Change passphrase:
+   - re-encryption path succeeds.
+   - no plaintext exposure regression in transition path.
+6. Disable E2EE:
+   - state flag off persists server-side.
+   - expected decrypted-storage behavior confirmed.
+7. Persistence behavior:
+   - key persistence on device works as designed.
+   - lock/refresh does not unset server E2EE state.
+
+### 5.5 Push Notifications
+
+1. Subscribe/unsubscribe flows.
+2. Subscription update (enabled toggle).
+3. Test notification endpoint.
+4. Reminder scheduler behavior:
+   - sends only when due and not already completed.
+5. Notification body rules:
+   - E2EE enabled: generic message.
+   - E2EE disabled: habit-name message.
+6. Notification icon behavior (current selected asset).
+7. Service worker:
+   - notification click opens only same-origin sanitized path.
+
+### 5.6 Frontend UX + Routing
+
+1. Public routes:
+   - `/`, `/login`, `/register`, `/forgot-password`, `/reset-password`, `/verify-email`
+2. Landing page:
+   - feature grid content and icons render correctly.
+3. Token privacy:
+   - reset/verify query tokens scrubbed from URL/history after read.
+
+### 5.7 Security Testing
+
+1. SAST:
+   - `gosec` clean
+   - `govulncheck` clean
+2. Dependency audit:
+   - `npm audit` (prod deps)
+3. SQLi guard script pass.
+4. Basic DAST smoke:
+   - unauthorized endpoints return 401/403 correctly
+   - forgot-password enumeration resistant response
+   - CORS preflight behavior for allowed origin
+
+### 5.8 End-to-End (E2E) Browser Testing
+
+#### Framework + Runner
+1. Use Playwright as the primary E2E framework.
+2. Run against Docker Compose environment for stable backend/frontend integration.
+3. Keep one Chromium-focused gate in PR, with optional Firefox/WebKit in nightly runs.
+
+#### Core E2E Journeys (must-pass)
+1. New user onboarding:
+   - Register -> login -> dashboard render -> welcome flow dismissal.
+2. Habit lifecycle:
+   - Create habit -> mark complete -> unmark -> edit -> delete.
+3. Recurrence/date flow:
+   - Create custom recurrence habit -> calendar view verification.
+4. E2EE onboarding:
+   - Enable from prompt or settings -> verify encrypted state after refresh.
+5. Vault behavior:
+   - Lock vault -> masked/locked UI state -> unlock with passphrase -> decrypted content shown.
+6. Session management:
+   - Open second session -> list sessions -> terminate other session -> verify revocation.
+7. Password flow:
+   - Change password -> prior session invalidation expectations verified.
+
+#### E2E Security/Privacy Assertions
+1. Reset/verify token query string removed from URL after initial page read.
+2. Notification click URL handling constrained to same-origin route.
+3. No raw stack traces shown in user-facing UI for expected errors.
+
+#### E2E Test Data and Isolation
+1. Use per-test unique usernames (`e2e_<timestamp>_<rand>`).
+2. Prefer API-level cleanup fixture after each suite.
+3. If cleanup is unavailable, reset DB between suites in dedicated CI job.
+4. Store passphrases only in test runtime memory; never commit them.
+
+#### Flake Control
+1. Use deterministic selectors (`data-testid`) for new/fragile UI.
+2. Replace arbitrary sleeps with event- or network-based waits.
+3. Retry at test level only for known transient infra errors; no blanket high retries.
+
+#### Reporting
+1. Save Playwright HTML report as CI artifact.
+2. Save traces/videos on failure for triage.
+3. Link failed test names to defect tickets in triage pass.
+
+---
+
+## 6. Test Data Plan
+
+- Seed users:
+  - User A: no email, no E2EE
+  - User B: verified email, E2EE enabled
+  - User C: multiple sessions
+- Seed habits:
+  - positive + negative
+  - with/without notes
+  - with/without reminders
+  - recurring daily + custom + archived
+- Seed logs:
+  - contiguous streak
+  - missed day
+  - frozen day
+
+---
+
+## 7. Tooling and Commands (Execution Catalog)
+
+### Backend
+- `cd backend && gofmt -w *.go`
+- `cd backend && go test ./...`
+- `cd backend && $(go env GOPATH)/bin/gosec ./...`
+- `cd backend && $(go env GOPATH)/bin/govulncheck ./...`
+- `./scripts/check-sql-injection-guard.sh`
+
+### Frontend
+- `cd stokely-frontend && npm run build`
+- `cd stokely-frontend && npm audit --omit=dev`
+
+### End-to-End
+- `cd stokely-frontend && npx playwright test` (full local run)
+- `cd stokely-frontend && npx playwright test tests/e2e/smoke.spec.ts` (fast PR smoke)
+- `cd stokely-frontend && npx playwright show-report` (local report review)
+
+### Runtime Smoke
+- Start stack (local or docker)
+- Run scripted curl checks for auth/session/cors/forgot-password behavior
+
+---
+
+## 8. Pass/Fail Release Criteria
+
+Release is blocked if any of the following occur:
+
+1. Core flows fail (register/login/habit CRUD/logging/E2EE enable-unlock).
+2. Security regressions in CSRF/session/token handling.
+3. E2EE state persistence failures after refresh/relogin.
+4. Scheduler or reminder behavior sends incorrect content for E2EE mode.
+5. Critical/high vuln findings unresolved or untriaged.
+6. Any critical-path E2E journey fails in release gate.
+
+---
+
+## 9. Defect Triage Rules
+
+- P0: data loss, auth bypass, encryption break, remote security issue.
+- P1: wrong user data shown, E2EE state drift, broken password/session flow.
+- P2: incorrect UI state or feature behavior without security/data impact.
+- P3: copy/layout/low-risk polish.
+
+Every defect must include:
+- Repro steps
+- Expected vs actual
+- Environment
+- Commit SHA under test
+- Logs/screenshot/request traces where relevant
+
+---
+
+## 10. Execution Record Template (for later runs)
+
+Use this block per run:
+
+- Date:
+- Environment:
+- Commit SHA:
+- Wave:
+- Suites executed:
+- Failures found:
+- Blockers:
+- Go/No-Go recommendation:
+
+---
+
+## 11. Execution Record (2026-03-12)
+
+- Date: 2026-03-12
+- Environment: Local Dev (frontend + backend + Playwright Chromium)
+- Commit SHA: working tree (uncommitted)
+- Wave: Wave 1 + selected Wave 2 coverage
+- Suites executed:
+  - `cd backend && go test ./...`
+  - `cd backend && GOTOOLCHAIN=go1.25.8 $(go env GOPATH)/bin/gosec ./...`
+  - `cd backend && GOTOOLCHAIN=go1.25.8 GOCACHE=/tmp/gocache-govuln $(go env GOPATH)/bin/govulncheck ./...`
+  - `./scripts/check-sql-injection-guard.sh`
+  - `cd stokely-frontend && npm run build`
+  - `cd stokely-frontend && npm run test:run`
+  - `cd stokely-frontend && npm run test:e2e`
+  - `cd stokely-frontend && npm audit --omit=dev`
+- Failures found:
+  - None in executed suites.
+- Blockers:
+  - None after Playwright runtime dependencies were installed locally.
+- Go/No-Go recommendation:
+  - Go for current tested scope (backend unit/security checks, frontend unit/build, Playwright public-route smoke, E2EE utility/context/component tests).
+  - Remaining matrix items requiring full authenticated API journey E2E and staging/pre-release gates should run in CI/staging wave.

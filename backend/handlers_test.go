@@ -1,0 +1,292 @@
+package main
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/cookie"
+	"github.com/gin-gonic/gin"
+)
+
+func TestIsValidRecurrence(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		in   string
+		want bool
+	}{
+		{name: "daily", in: "Su-Mo-Tu-We-Th-Fr-Sa", want: true},
+		{name: "weekday", in: "Mo-Tu-We-Th-Fr", want: true},
+		{name: "single day", in: "Su", want: true},
+		{name: "duplicate day", in: "Mo-Mo", want: false},
+		{name: "invalid token", in: "Mon-Tu", want: false},
+		{name: "too many days", in: "Su-Mo-Tu-We-Th-Fr-Sa-Su", want: false},
+		{name: "empty", in: "", want: false},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := isValidRecurrence(tc.in); got != tc.want {
+				t.Fatalf("isValidRecurrence(%q) = %v, want %v", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestIsValidReminderTime(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{in: "", want: true},
+		{in: "00:00", want: true},
+		{in: "23:59", want: true},
+		{in: "24:00", want: false},
+		{in: "9:00", want: false},
+		{in: "12:60", want: false},
+	}
+
+	for _, tc := range cases {
+		if got := isValidReminderTime(tc.in); got != tc.want {
+			t.Fatalf("isValidReminderTime(%q) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestDayCodeAndContainsDay(t *testing.T) {
+	t.Parallel()
+
+	d := time.Date(2026, 3, 12, 15, 0, 0, 0, time.FixedZone("UTC-5", -5*3600)) // Thursday in UTC too
+	if got := dayCode(d); got != "Th" {
+		t.Fatalf("dayCode() = %q, want %q", got, "Th")
+	}
+	if !containsDay("Mo-We-Th", "Th") {
+		t.Fatal("containsDay should have matched Th")
+	}
+	if containsDay("Mo-We-Fr", "Th") {
+		t.Fatal("containsDay should not have matched Th")
+	}
+}
+
+func TestParseDateOrToday(t *testing.T) {
+	t.Parallel()
+
+	got, err := parseDateOrToday("2026-03-12")
+	if err != nil {
+		t.Fatalf("parseDateOrToday returned unexpected error: %v", err)
+	}
+	want := time.Date(2026, 3, 12, 0, 0, 0, 0, time.UTC)
+	if !got.Equal(want) {
+		t.Fatalf("parseDateOrToday = %v, want %v", got, want)
+	}
+
+	if _, err := parseDateOrToday("2026/03/12"); err == nil {
+		t.Fatal("parseDateOrToday should fail on invalid format")
+	}
+
+	gotToday, err := parseDateOrToday("")
+	if err != nil {
+		t.Fatalf("parseDateOrToday empty returned unexpected error: %v", err)
+	}
+	if gotToday.Location() != time.UTC || gotToday.Hour() != 0 || gotToday.Minute() != 0 {
+		t.Fatalf("parseDateOrToday empty should return UTC midnight, got %v", gotToday)
+	}
+}
+
+func TestHashEmailToken(t *testing.T) {
+	t.Parallel()
+
+	a := hashEmailToken("abc")
+	b := hashEmailToken("abc")
+	c := hashEmailToken("abcd")
+
+	if a != b {
+		t.Fatal("hashEmailToken must be deterministic")
+	}
+	if a == c {
+		t.Fatal("hashEmailToken should differ for different inputs")
+	}
+	if len(a) != 64 {
+		t.Fatalf("hashEmailToken length = %d, want 64", len(a))
+	}
+}
+
+func TestStreakFromLoggedDatesSkipsMissingToday(t *testing.T) {
+	t.Parallel()
+
+	habit := Habit{Recurrence: "Su-Mo-Tu-We-Th-Fr-Sa"}
+	today := time.Date(2026, 3, 12, 0, 0, 0, 0, time.UTC)
+	windowStart := today.AddDate(0, 0, -90)
+	loggedDates := map[string]bool{
+		"2026-03-11": true,
+		"2026-03-10": true,
+	}
+
+	got := streakFromLoggedDates(habit, loggedDates, today, windowStart)
+	if got != 2 {
+		t.Fatalf("streakFromLoggedDates = %d, want 2", got)
+	}
+}
+
+func TestLongestStreakEver(t *testing.T) {
+	t.Parallel()
+
+	habit := Habit{
+		CreatedAt:  time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC),
+		Recurrence: "Su-Mo-Tu-We-Th-Fr-Sa",
+	}
+	logs := []HabitLog{
+		{LogDate: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)},
+		{LogDate: time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)},
+		{LogDate: time.Date(2026, 3, 3, 0, 0, 0, 0, time.UTC)},
+		{LogDate: time.Date(2026, 3, 5, 0, 0, 0, 0, time.UTC)},
+		{LogDate: time.Date(2026, 3, 6, 0, 0, 0, 0, time.UTC)},
+	}
+	if got := longestStreakEver(habit, logs); got != 3 {
+		t.Fatalf("longestStreakEver = %d, want 3", got)
+	}
+}
+
+func TestGenerateTokens(t *testing.T) {
+	t.Parallel()
+
+	csrfToken, err := generateCSRFToken()
+	if err != nil {
+		t.Fatalf("generateCSRFToken returned error: %v", err)
+	}
+	sessionID, err := generateSessionID()
+	if err != nil {
+		t.Fatalf("generateSessionID returned error: %v", err)
+	}
+	if len(csrfToken) < 40 {
+		t.Fatalf("generateCSRFToken too short: %d", len(csrfToken))
+	}
+	if len(sessionID) < 30 {
+		t.Fatalf("generateSessionID too short: %d", len(sessionID))
+	}
+}
+
+func TestRequireCSRFMiddleware(t *testing.T) {
+	t.Parallel()
+	gin.SetMode(gin.TestMode)
+
+	makeRouter := func(sessionToken string, headerToken string) *gin.Engine {
+		r := gin.New()
+		store := cookie.NewStore([]byte("test-secret"))
+		r.Use(sessions.Sessions("test-session", store))
+		r.POST("/", func(c *gin.Context) {
+			if sessionToken != "" {
+				s := sessions.Default(c)
+				s.Set("csrfToken", sessionToken)
+				_ = s.Save()
+			}
+			if headerToken != "" {
+				c.Request.Header.Set("X-CSRF-Token", headerToken)
+			}
+			requireCSRF(c)
+			if c.IsAborted() {
+				return
+			}
+			c.Status(http.StatusNoContent)
+		})
+		r.GET("/", func(c *gin.Context) {
+			requireCSRF(c)
+			if c.IsAborted() {
+				return
+			}
+			c.Status(http.StatusNoContent)
+		})
+		return r
+	}
+
+	t.Run("safe method bypasses csrf", func(t *testing.T) {
+		r := makeRouter("", "")
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusNoContent {
+			t.Fatalf("GET status = %d, want %d", w.Code, http.StatusNoContent)
+		}
+	})
+
+	t.Run("missing csrf in session rejected", func(t *testing.T) {
+		r := makeRouter("", "")
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{}`))
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("POST status = %d, want %d", w.Code, http.StatusForbidden)
+		}
+		if !strings.Contains(w.Body.String(), "CSRF token missing") {
+			t.Fatalf("response = %q, expected csrf missing message", w.Body.String())
+		}
+	})
+
+	t.Run("mismatched csrf header rejected", func(t *testing.T) {
+		r := makeRouter("token-1", "token-2")
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{}`))
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("POST status = %d, want %d", w.Code, http.StatusForbidden)
+		}
+		if !strings.Contains(w.Body.String(), "Invalid CSRF token") {
+			t.Fatalf("response = %q, expected invalid csrf message", w.Body.String())
+		}
+	})
+
+	t.Run("matching csrf header accepted", func(t *testing.T) {
+		r := makeRouter("same-token", "same-token")
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{}`))
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusNoContent {
+			t.Fatalf("POST status = %d, want %d", w.Code, http.StatusNoContent)
+		}
+	})
+}
+
+func TestCheckAuthRateLimit(t *testing.T) {
+	t.Parallel()
+	gin.SetMode(gin.TestMode)
+
+	authLimitMap = sync.Map{}
+	authLimiterJanitorOnce = sync.Once{}
+
+	r := gin.New()
+	r.GET("/", func(c *gin.Context) {
+		if checkAuthRateLimit(c) {
+			c.Status(http.StatusOK)
+			return
+		}
+		c.Status(http.StatusTooManyRequests)
+	})
+
+	for i := 0; i < authRateMax; i++ {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = "203.0.113.1:12345"
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("request %d status = %d, want %d", i+1, w.Code, http.StatusOK)
+		}
+	}
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "203.0.113.1:12345"
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("request %d status = %d, want %d", authRateMax+1, w.Code, http.StatusTooManyRequests)
+	}
+}
