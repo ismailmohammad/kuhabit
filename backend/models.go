@@ -11,9 +11,10 @@ type User struct {
 	Password          string    `gorm:"type:varchar(255);not null" json:"-"`
 	WelcomeSeen       bool      `gorm:"default:false" json:"-"`
 	DailySparkEnabled bool      `gorm:"default:true" json:"-"`
-	E2EEEnabled       bool      `gorm:"default:false" json:"e2eeEnabled"`
-	E2EESalt          string    `gorm:"type:varchar(64);default:''" json:"-"`
-	E2EEVerifier      string    `gorm:"type:varchar(512);default:''" json:"-"`
+	E2EEEnabled       bool      `gorm:"column:e2ee_enabled;default:false" json:"e2eeEnabled"`
+	E2EEPromptPending bool      `gorm:"column:e2ee_prompt_pending;default:true" json:"-"`
+	E2EESalt          string    `gorm:"column:e2ee_salt;type:varchar(64);default:''" json:"-"`
+	E2EEVerifier      string    `gorm:"column:e2ee_verifier;type:varchar(512);default:''" json:"-"`
 }
 
 type Habit struct {

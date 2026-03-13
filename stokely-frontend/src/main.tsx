@@ -16,6 +16,21 @@ import VerifyEmailPage from './components/UserActionPages/VerifyEmailPage.tsx'
 import { Toaster } from 'react-hot-toast'
 import { E2EEProvider } from './context/E2EEContext.tsx'
 
+// Trusted Types compatibility bootstrap (safe no-op on unsupported browsers).
+if (typeof window !== 'undefined') {
+  const tt = (window as Window & { trustedTypes?: { createPolicy?: (name: string, rules: { createHTML?: (input: string) => string; createScriptURL?: (input: string) => string; }) => unknown } }).trustedTypes;
+  if (tt?.createPolicy) {
+    try {
+      tt.createPolicy('stokely', {
+        createHTML: input => input,
+        createScriptURL: input => input,
+      });
+    } catch {
+      // Policy already exists or browser blocks duplicate policy creation.
+    }
+  }
+}
+
 const router = createBrowserRouter([
   {
     path: "/",

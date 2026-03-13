@@ -78,8 +78,42 @@ func main() {
 	db.AutoMigrate(&User{}, &Habit{}, &HabitLog{}, &PushSubscription{}, &StreakFreeze{}, &UserSession{}, &EmailToken{})
 	// Safety net: ensure E2EE columns exist even if AutoMigrate missed them on existing tables.
 	db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS e2ee_enabled boolean NOT NULL DEFAULT false`)
+	db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS e2ee_prompt_pending boolean NOT NULL DEFAULT true`)
 	db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS e2ee_salt varchar(64) NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS e2ee_verifier varchar(512) NOT NULL DEFAULT ''`)
+	// Legacy bridge: if earlier migrations created e2_ee_* columns, copy values into canonical e2ee_* columns.
+	db.Exec(`
+DO $$
+BEGIN
+	IF EXISTS (
+		SELECT 1 FROM information_schema.columns
+		WHERE table_name = 'users' AND column_name = 'e2_ee_enabled'
+	) THEN
+		EXECUTE 'UPDATE users SET e2ee_enabled = (COALESCE(e2ee_enabled, false) OR COALESCE(e2_ee_enabled, false))';
+	END IF;
+
+	IF EXISTS (
+		SELECT 1 FROM information_schema.columns
+		WHERE table_name = 'users' AND column_name = 'e2_ee_prompt_pending'
+	) THEN
+		EXECUTE 'UPDATE users SET e2ee_prompt_pending = (COALESCE(e2ee_prompt_pending, true) AND COALESCE(e2_ee_prompt_pending, true))';
+	END IF;
+
+	IF EXISTS (
+		SELECT 1 FROM information_schema.columns
+		WHERE table_name = 'users' AND column_name = 'e2_ee_salt'
+	) THEN
+		EXECUTE 'UPDATE users SET e2ee_salt = COALESCE(NULLIF(e2ee_salt, ''''''), NULLIF(e2_ee_salt, ''''''), '''''')';
+	END IF;
+
+	IF EXISTS (
+		SELECT 1 FROM information_schema.columns
+		WHERE table_name = 'users' AND column_name = 'e2_ee_verifier'
+	) THEN
+		EXECUTE 'UPDATE users SET e2ee_verifier = COALESCE(NULLIF(e2ee_verifier, ''''''), NULLIF(e2_ee_verifier, ''''''), '''''')';
+	END IF;
+END $$;
+`)
 	// Trust emails that existed before the verification system was added.
 	db.Exec("UPDATE users SET email_verified = true WHERE email IS NOT NULL AND email_verified = false")
 	seedInitialStreakFreezes()

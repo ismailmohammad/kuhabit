@@ -72,6 +72,15 @@ export async function decrypt(key: CryptoKey, ciphertext: string): Promise<strin
     return new TextDecoder().decode(plainBuf);
 }
 
+export async function decryptRecursively(key: CryptoKey, value: string, maxDepth = 5): Promise<string> {
+    let current = value;
+    for (let i = 0; i < maxDepth; i++) {
+        if (!isEncrypted(current)) return current;
+        current = await decrypt(key, current);
+    }
+    return current;
+}
+
 export function isEncrypted(value: string): boolean {
     return value.startsWith(E2EE_PREFIX);
 }

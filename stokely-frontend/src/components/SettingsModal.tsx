@@ -8,7 +8,7 @@ import type { RootState } from '../redux/store';
 import type { PushSubscriptionDevice, UserSession } from '../types/habit';
 import { syncPushSubscriptionOnDevice } from '../utils/pushNotifications';
 import { useE2EE } from '../context/E2EEContext';
-import { generateSalt, deriveKey, makeVerifier, checkVerifier, encrypt, decrypt, isEncrypted } from '../utils/e2ee';
+import { generateSalt, deriveKey, makeVerifier, checkVerifier, encrypt, decryptRecursively, isEncrypted } from '../utils/e2ee';
 import './SettingsModal.css';
 
 type Props = { onClose: () => void; initialSection?: 'e2ee' };
@@ -82,7 +82,12 @@ export default function SettingsModal({ onClose, initialSection }: Props) {
 
     // E2EE
     const e2eeSectionRef = useRef<HTMLElement>(null);
-    const { key: e2eeKey, isUnlocked, unlock: e2eeUnlock, lock: e2eeLock } = useE2EE();
+    const {
+        key: e2eeKey,
+        isUnlocked,
+        unlock: e2eeUnlock,
+        lock: e2eeLock,
+    } = useE2EE();
     const [e2eePassphrase, setE2EEPassphrase] = useState('');
     const [e2eeConfirm, setE2EEConfirm] = useState('');
     const [e2eeLoading, setE2EELoading] = useState(false);
@@ -270,13 +275,20 @@ export default function SettingsModal({ onClose, initialSection }: Props) {
             const salt = generateSalt();
             const key = await deriveKey(e2eePassphrase, salt);
             const verifier = await makeVerifier(key);
-            // No bulk encryption — users choose per habit. Just store vault credentials.
-            await api.e2ee.enable({ salt, verifier, habits: [] });
+            const habits = await api.habits.list('all');
+            const encryptedHabits = await Promise.all(habits.map(async h => ({
+                id: h.id,
+                name: isEncrypted(h.name) ? h.name : await encrypt(key, h.name),
+                notes: h.notes ? (isEncrypted(h.notes) ? h.notes : await encrypt(key, h.notes)) : h.notes,
+            })));
+            const enableRes = await api.e2ee.enable({ salt, verifier, habits: encryptedHabits });
+            if (!enableRes.enabled) {
+                throw new Error('E2EE was not persisted on the server');
+            }
             await e2eeUnlock(key);
-            // Server returned 200 — update Redux directly (no re-fetch needed).
-            dispatch(setUserInfo({ ...userInfo, e2eeEnabled: true }));
+            dispatch(setUserInfo({ ...userInfo, e2eeEnabled: true, e2eeSetupPrompt: false }));
             setE2EEPassphrase(''); setE2EEConfirm(''); setE2EEShowEnable(false);
-            toast.success('Vault set up — encrypt individual habits from the habit editor');
+            toast.success('End-to-end encryption is now enabled for your account');
         } catch (err: unknown) {
             toast.error(err instanceof Error ? err.message : 'Failed to enable E2EE');
         } finally {
@@ -318,13 +330,17 @@ export default function SettingsModal({ onClose, initialSection }: Props) {
             const newSalt = generateSalt();
             const newKey = await deriveKey(e2eeNewPass, newSalt);
             const newVerifier = await makeVerifier(newKey);
-            // Only re-encrypt habits that are currently encrypted
             const habits = await api.habits.list('all');
-            const encryptedHabits = habits.filter(h => isEncrypted(h.name));
-            const reencryptedHabits = await Promise.all(encryptedHabits.map(async h => ({
+            const encryptedHabits = habits.filter(h => isEncrypted(h.name) || isEncrypted(h.notes));
+            const decryptedHabits = await Promise.all(encryptedHabits.map(async h => ({
                 id: h.id,
-                name: await encrypt(newKey, await decrypt(e2eeKey, h.name)),
-                notes: isEncrypted(h.notes) ? await encrypt(newKey, await decrypt(e2eeKey, h.notes)) : h.notes,
+                name: isEncrypted(h.name) ? await decryptRecursively(e2eeKey, h.name) : h.name,
+                notes: isEncrypted(h.notes) ? await decryptRecursively(e2eeKey, h.notes) : h.notes,
+            })));
+            const reencryptedHabits = await Promise.all(decryptedHabits.map(async h => ({
+                id: h.id,
+                name: await encrypt(newKey, h.name),
+                notes: h.notes ? await encrypt(newKey, h.notes) : h.notes,
             })));
             await api.e2ee.changePassphrase({ salt: newSalt, verifier: newVerifier, habits: reencryptedHabits });
             await e2eeUnlock(newKey);
@@ -341,17 +357,16 @@ export default function SettingsModal({ onClose, initialSection }: Props) {
         if (!userInfo || !e2eeKey) return;
         setE2EELoading(true);
         try {
-            // Only send back habits that are actually encrypted
             const habits = await api.habits.list('all');
-            const encryptedHabits = habits.filter(h => isEncrypted(h.name));
+            const encryptedHabits = habits.filter(h => isEncrypted(h.name) || isEncrypted(h.notes));
             const decryptedHabits = await Promise.all(encryptedHabits.map(async h => ({
                 id: h.id,
-                name: await decrypt(e2eeKey, h.name),
-                notes: isEncrypted(h.notes) ? await decrypt(e2eeKey, h.notes) : h.notes,
+                name: isEncrypted(h.name) ? await decryptRecursively(e2eeKey, h.name) : h.name,
+                notes: isEncrypted(h.notes) ? await decryptRecursively(e2eeKey, h.notes) : h.notes,
             })));
             await api.e2ee.disable(decryptedHabits);
             await e2eeLock();
-            dispatch(setUserInfo({ ...userInfo, e2eeEnabled: false }));
+            dispatch(setUserInfo({ ...userInfo, e2eeEnabled: false, e2eeSetupPrompt: false }));
             setE2EEDisableStep(false);
             toast.success('End-to-end encryption disabled');
         } catch (err: unknown) {
@@ -515,8 +530,9 @@ export default function SettingsModal({ onClose, initialSection }: Props) {
                     <h3 className="settings-section-title">End-to-End Encryption</h3>
                     {!userInfo?.e2eeEnabled ? (
                         <>
-                            <p className="settings-desc">Encrypts habit names and notes client-side. The server never sees your data in plaintext.</p>
+                            <p className="settings-desc">Encrypts habit names and notes account-wide. The server never sees your data in plaintext.</p>
                             <p className="settings-desc" style={{ color: '#f0a66a' }}>⚠ Push notification reminders will show generic text when E2EE is enabled.</p>
+                            <p className="settings-desc" style={{ color: '#f0a66a' }}>⚠ Your E2EE passphrase cannot be recovered. If old data was encrypted with an unknown/old key, that data may stay unreadable.</p>
                             {!e2eeShowEnable ? (
                                 <button className="settings-btn settings-btn--primary" onClick={() => setE2EEShowEnable(true)}>
                                     Enable E2EE
@@ -558,7 +574,7 @@ export default function SettingsModal({ onClose, initialSection }: Props) {
                         <>
                             <p className="settings-desc">
                                 <span className="settings-session-current" style={{ marginRight: '0.5rem' }}>Active</span>
-                                Habit names and notes are encrypted on this device.
+                                Habit names and notes are encrypted for your whole account.
                             </p>
                             {!e2eeShowChange ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -574,7 +590,7 @@ export default function SettingsModal({ onClose, initialSection }: Props) {
                                         </button>
                                     ) : (
                                         <div className="delete-confirm-box">
-                                            <p className="delete-warning">⚠️ This will decrypt all your habits on the server. Are you sure?</p>
+                                            <p className="delete-warning">⚠️ This will decrypt your account data on the server. Are you sure?</p>
                                             <div className="delete-actions">
                                                 <button className="settings-btn settings-btn--secondary" onClick={() => setE2EEDisableStep(false)}>Cancel</button>
                                                 <button className="settings-btn settings-btn--danger" disabled={e2eeLoading} onClick={() => void handleE2EEDisable()}>

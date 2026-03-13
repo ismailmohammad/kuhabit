@@ -12,7 +12,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { setUserInfo } from "../../redux/userSlice";
 import type { RootState } from "../../redux/store";
 import { useE2EE } from "../../context/E2EEContext";
-import { decrypt, isEncrypted } from "../../utils/e2ee";
+import { decryptRecursively, encrypt, generateSalt, deriveKey, makeVerifier, isEncrypted } from "../../utils/e2ee";
 import VaultUnlockModal from "../VaultUnlockModal";
 
 import CubeRed from '../../assets/cube-logo-red.png';
@@ -521,6 +521,35 @@ const InstallBtn = styled.button`
     cursor: pointer;
 `;
 
+const E2EEPromptOverlay = styled(WelcomeOverlay)`
+    z-index: 345;
+`;
+
+const E2EEPromptCard = styled(WelcomeCard)`
+    max-width: 520px;
+`;
+
+const E2EEPromptInput = styled.input`
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 0.6rem;
+    background: #181818;
+    color: #fff;
+    border: 1px solid #373737;
+    border-radius: 10px;
+    padding: 0.62rem 0.75rem;
+    font-size: 0.9rem;
+
+    &:focus {
+        outline: none;
+        border-color: #2dca8e;
+    }
+`;
+
+const E2EEPromptActions = styled(InstallActions)`
+    margin-top: 1rem;
+`;
+
 // ── Confirm modal ──────────────────────────────────────────────────────────────
 
 const ConfirmOverlay = styled.div<{ $closing: boolean }>`
@@ -642,6 +671,9 @@ export default function Dashboard() {
     const [installPlatform, setInstallPlatform] = useState<'ios' | 'android' | null>(null);
     const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
     const [allVisibleCount, setAllVisibleCount] = useState(ALL_TAB_PAGE_SIZE);
+    const [e2eePassphrase, setE2EEPassphrase] = useState('');
+    const [e2eePassphraseConfirm, setE2EEPassphraseConfirm] = useState('');
+    const [e2eeSetupLoading, setE2EESetupLoading] = useState(false);
     const allLoadMoreRef = useRef<HTMLDivElement | null>(null);
     const hasShownDailySparkRef = useRef(false);
     const hadWelcomeOverlayRef = useRef(false);
@@ -652,10 +684,8 @@ export default function Dashboard() {
     const navigate = useNavigate();
     const dispatch = useDispatch();
     const userInfo = useSelector((state: RootState) => state.user.userInfo);
-    const { key: e2eeKey, isUnlocked } = useE2EE();
-    const [vaultModalOpen, setVaultModalOpen] = useState(true);
-    // Re-show modal whenever the vault becomes locked
-    useEffect(() => { if (!isUnlocked) setVaultModalOpen(true); }, [isUnlocked]);
+    const { key: e2eeKey, isUnlocked, unlock: e2eeUnlock } = useE2EE();
+    const [vaultModalOpen, setVaultModalOpen] = useState(false);
     const achievementSeenKey = userInfo?.id
         ? `${ACHIEVEMENT_SEEN_KEY_PREFIX}_${userInfo.id}`
         : null;
@@ -678,8 +708,12 @@ export default function Dashboard() {
         return Promise.all(raw.map(async h => ({
             ...h,
             encrypted: isEncrypted(h.name),
-            name: isEncrypted(h.name) ? await decrypt(key, h.name) : h.name,
-            notes: isEncrypted(h.notes) ? await decrypt(key, h.notes) : h.notes,
+            name: isEncrypted(h.name)
+                ? await decryptRecursively(key, h.name).catch(() => h.name)
+                : h.name,
+            notes: isEncrypted(h.notes)
+                ? await decryptRecursively(key, h.notes).catch(() => h.notes)
+                : h.notes,
         })));
     }
 
@@ -1002,7 +1036,7 @@ export default function Dashboard() {
             const newHabit = await api.habits.create(data);
             // Decrypt the new habit name for display if vault is unlocked
             const displayName = e2eeKey && isEncrypted(newHabit.name)
-                ? await decrypt(e2eeKey, newHabit.name)
+                ? await decryptRecursively(e2eeKey, newHabit.name).catch(() => newHabit.name)
                 : newHabit.name;
             const processed = e2eeKey
                 ? await decryptHabits([newHabit], e2eeKey)
@@ -1095,8 +1129,103 @@ export default function Dashboard() {
         { id: 'achievements', label: 'Achievements' },
     ];
 
+    const showE2EESetupPrompt = Boolean(
+        userInfo?.e2eeSetupPrompt &&
+        !userInfo?.e2eeEnabled &&
+        !showWelcomeOverlay &&
+        !userInfo?.showWelcome &&
+        !showDailySparkOverlay
+    );
+
+    const handleDismissE2EEPrompt = () => {
+        if (!userInfo) return;
+        dispatch(setUserInfo({ ...userInfo, e2eeSetupPrompt: false }));
+        setE2EEPassphrase('');
+        setE2EEPassphraseConfirm('');
+    };
+
+    const handleEnableE2EEFromPrompt = async () => {
+        if (!userInfo) return;
+        if (e2eePassphrase.length < 8) {
+            toast.error('Passphrase must be at least 8 characters');
+            return;
+        }
+        if (e2eePassphrase !== e2eePassphraseConfirm) {
+            toast.error('Passphrases do not match');
+            return;
+        }
+
+        setE2EESetupLoading(true);
+        try {
+            const salt = generateSalt();
+            const key = await deriveKey(e2eePassphrase, salt);
+            const verifier = await makeVerifier(key);
+            const allHabits = await api.habits.list('all');
+            const encryptedHabits = await Promise.all(allHabits.map(async h => ({
+                id: h.id,
+                name: isEncrypted(h.name) ? h.name : await encrypt(key, h.name),
+                notes: h.notes ? (isEncrypted(h.notes) ? h.notes : await encrypt(key, h.notes)) : h.notes,
+            })));
+
+            const enableRes = await api.e2ee.enable({ salt, verifier, habits: encryptedHabits });
+            if (!enableRes.enabled) {
+                throw new Error('E2EE was not persisted on the server');
+            }
+            await e2eeUnlock(key);
+            dispatch(setUserInfo({ ...userInfo, e2eeEnabled: true, e2eeSetupPrompt: false }));
+            setE2EEPassphrase('');
+            setE2EEPassphraseConfirm('');
+            toast.success('End-to-end encryption enabled');
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : 'Failed to enable E2EE');
+        } finally {
+            setE2EESetupLoading(false);
+        }
+    };
+
     return (
         <>
+            {showE2EESetupPrompt && (
+                <E2EEPromptOverlay>
+                    <E2EEPromptCard>
+                        <InstallTitle>Set Up End-to-End Encryption?</InstallTitle>
+                        <InstallText>
+                            Turn on account-wide E2EE to encrypt habit names and notes with a password-derived key that only your devices can derive.
+                        </InstallText>
+                        <InstallText style={{ marginTop: '0.45rem', color: '#f0a66a' }}>
+                            Important: your passphrase cannot be recovered. If older data was encrypted with an unknown/old key, that data may remain unreadable.
+                        </InstallText>
+                        <E2EEPromptInput
+                            type="password"
+                            placeholder="Create E2EE passphrase (min 8 chars)"
+                            value={e2eePassphrase}
+                            onChange={e => setE2EEPassphrase(e.target.value)}
+                            autoComplete="new-password"
+                        />
+                        <E2EEPromptInput
+                            type="password"
+                            placeholder="Confirm passphrase"
+                            value={e2eePassphraseConfirm}
+                            onChange={e => setE2EEPassphraseConfirm(e.target.value)}
+                            autoComplete="new-password"
+                        />
+                        <E2EEPromptActions>
+                            <ConfirmBtn
+                                onClick={handleDismissE2EEPrompt}
+                                disabled={e2eeSetupLoading}
+                            >
+                                Maybe Later
+                            </ConfirmBtn>
+                            <InstallBtn
+                                onClick={() => void handleEnableE2EEFromPrompt()}
+                                disabled={e2eeSetupLoading || e2eePassphrase.length < 8 || e2eePassphrase !== e2eePassphraseConfirm}
+                            >
+                                {e2eeSetupLoading ? 'Encrypting…' : 'Enable E2EE'}
+                            </InstallBtn>
+                        </E2EEPromptActions>
+                    </E2EEPromptCard>
+                </E2EEPromptOverlay>
+            )}
             {userInfo?.e2eeEnabled && !isUnlocked && vaultModalOpen && (
                 <VaultUnlockModal onClose={() => setVaultModalOpen(false)} />
             )}

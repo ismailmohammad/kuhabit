@@ -7,7 +7,7 @@ import { syncPushSubscriptionOnDevice } from "../../utils/pushNotifications";
 import { useSelector } from "react-redux";
 import type { RootState } from "../../redux/store";
 import { useE2EE } from "../../context/E2EEContext";
-import { encrypt } from "../../utils/e2ee";
+import { encrypt, isEncrypted } from "../../utils/e2ee";
 import SettingsModal from "../SettingsModal";
 
 import CurbCube from '../../assets/cube-logo-red.png';
@@ -150,8 +150,6 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
     const [notes, setNotes] = useState('');
     const [reminderTime, setReminderTime] = useState('');
 
-    // Per-habit encryption toggle
-    const [encryptHabit, setEncryptHabit] = useState(false);
     const [showE2EESettings, setShowE2EESettings] = useState(false);
 
     // Danger zone confirm state
@@ -177,7 +175,6 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
 
     useEffect(() => {
         if (habitToEdit) {
-            setEncryptHabit(habitToEdit.encrypted ?? false);
             setName(habitToEdit.name);
             setPositiveType(habitToEdit.positiveType);
             const p = detectPreset(habitToEdit.recurrence);
@@ -204,7 +201,6 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
             setReminderTime('');
             setUseEndDate(false);
             setRecurrenceEnd('');
-            setEncryptHabit(false);
         }
         setShowDeleteConfirm(false);
         setDeleteAck(false);
@@ -260,9 +256,15 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
 
         let submitName = name;
         let submitNotes = notes;
-        if (encryptHabit && isUnlocked && e2eeKey) {
-            submitName = await encrypt(e2eeKey, name);
-            submitNotes = notes ? await encrypt(e2eeKey, notes) : notes;
+
+        if (userInfo?.e2eeEnabled && (!isUnlocked || !e2eeKey)) {
+            toast.error('Unlock vault before saving while E2EE is enabled');
+            return;
+        }
+
+        if (userInfo?.e2eeEnabled && e2eeKey) {
+            submitName = isEncrypted(name) ? name : await encrypt(e2eeKey, name);
+            submitNotes = notes ? (isEncrypted(notes) ? notes : await encrypt(e2eeKey, notes)) : notes;
         }
 
         if (isEdit && habitToEdit) {
@@ -573,7 +575,7 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
                                     🔐 End-to-End Encryption
                                 </p>
                                 <p style={{ fontSize: '0.8rem', color: '#666', margin: '0.25rem 0 0.5rem' }}>
-                                    Encrypt individual habit names and notes so the server never sees your data in plaintext.
+                                    Enable account-wide encryption in Settings.
                                 </p>
                                 <button
                                     type="button"
@@ -584,14 +586,9 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
                                 </button>
                             </>
                         ) : isUnlocked ? (
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem', color: '#ccc' }}>
-                                <input
-                                    type="checkbox"
-                                    checked={encryptHabit}
-                                    onChange={e => setEncryptHabit(e.target.checked)}
-                                />
-                                🔐 Encrypt this habit's name and notes on save
-                            </label>
+                            <p className="e2e-label" style={{ color: '#2dca8e', margin: 0 }}>
+                                🔐 E2EE is enabled. This habit will be encrypted on save.
+                            </p>
                         ) : (
                             <p className="e2e-label" style={{ color: '#f0a66a', margin: 0 }}>
                                 🔒 Vault locked — unlock vault in the header to enable encryption

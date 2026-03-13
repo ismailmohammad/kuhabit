@@ -23,6 +23,7 @@ async function req<T>(path: string, options?: RequestInit): Promise<T> {
     }
     const res = await fetch(`${BASE}${path}`, {
         credentials: 'include',
+        cache: 'no-store',
         headers: {
             ...headers,
             ...(options?.headers as Record<string, string> | undefined),
@@ -109,7 +110,7 @@ export const api = {
     e2ee: {
         status: () => req<{ enabled: boolean; salt?: string; verifier?: string }>('/e2ee'),
         enable: (data: { salt: string; verifier: string; habits: Array<{ id: number; name: string; notes: string }> }) =>
-            req<void>('/e2ee/enable', { method: 'POST', body: JSON.stringify(data) }),
+            req<{ enabled: boolean; message: string }>('/e2ee/enable', { method: 'POST', body: JSON.stringify(data) }),
         changePassphrase: (data: { salt: string; verifier: string; habits: Array<{ id: number; name: string; notes: string }> }) =>
             req<void>('/e2ee/passphrase', { method: 'PUT', body: JSON.stringify(data) }),
         disable: (habits: Array<{ id: number; name: string; notes: string }>) =>

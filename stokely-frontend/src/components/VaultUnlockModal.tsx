@@ -1,9 +1,7 @@
 import { useState, type FormEvent } from 'react';
-import { useDispatch } from 'react-redux';
 import { api } from '../api/api';
 import { deriveKey, checkVerifier } from '../utils/e2ee';
 import { useE2EE } from '../context/E2EEContext';
-import { setUserInfo } from '../redux/userSlice';
 import { useSelector } from 'react-redux';
 import type { RootState } from '../redux/store';
 
@@ -13,7 +11,6 @@ interface Props {
 
 export default function VaultUnlockModal({ onClose }: Props) {
     const { unlock } = useE2EE();
-    const dispatch = useDispatch();
     const userInfo = useSelector((state: RootState) => state.user.userInfo);
     const [passphrase, setPassphrase] = useState('');
     const [loading, setLoading] = useState(false);
@@ -27,9 +24,7 @@ export default function VaultUnlockModal({ onClose }: Props) {
         try {
             const status = await api.e2ee.status();
             if (!status.enabled) {
-                // Redux state is stale — server says E2EE is not enabled. Refresh user info.
-                const me = await api.auth.me();
-                dispatch(setUserInfo(me));
+                setError('E2EE is not enabled for this account.');
                 return;
             }
             if (!status.salt || !status.verifier) {

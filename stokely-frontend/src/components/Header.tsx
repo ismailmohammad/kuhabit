@@ -203,7 +203,10 @@ const Header = () => {
                             {userInfo.e2eeEnabled && (
                                 isUnlocked ? (
                                     <NavBtn
-                                        onClick={() => void lock()}
+                                        onClick={() => void (async () => {
+                                            await lock();
+                                            toast.success('Vault locked');
+                                        })()}
                                         title="Vault is unlocked — click to lock"
                                         style={{ color: '#2dca8e', borderColor: '#2dca8e' }}
                                     >
