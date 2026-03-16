@@ -250,7 +250,7 @@ const HabitModal = ({ showModal, onClose, onCreate, onUpdate, onDelete, habitToE
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const recurrence = buildRecurrence();
-        const reminderTZ = reminderTime ? browserTimeZone() : '';
+        const reminderTZ = browserTimeZone();
         const endDate = useEndDate && recurrenceEnd ? recurrenceEnd : null;
 
         if (reminderTime) {

@@ -145,6 +145,76 @@ func TestReminderDueNowTimezoneMissingMatch(t *testing.T) {
 	}
 }
 
+func TestReminderDueNowTimezoneUsesLocalDayKey(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 3, 16, 0, 30, 0, 0, time.UTC) // Sunday evening in Toronto.
+	loc, err := time.LoadLocation("America/Toronto")
+	if err != nil {
+		t.Fatalf("failed to load timezone: %v", err)
+	}
+	h := Habit{
+		ID:           4,
+		ReminderTime: now.In(loc).Format("15:04"),
+		ReminderTZ:   "America/Toronto",
+	}
+	due, dayKey, logDate, _ := reminderDueNow(h, now)
+	if !due {
+		t.Fatal("expected reminder to be due")
+	}
+	if dayKey != "Su" {
+		t.Fatalf("dayKey = %q, want %q", dayKey, "Su")
+	}
+	if got := logDate.Format("2006-01-02"); got != "2026-03-15" {
+		t.Fatalf("logDate = %q, want %q", got, "2026-03-15")
+	}
+}
+
+func TestFreezeDueNowTimezoneMidnight(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 3, 16, 4, 0, 0, 0, time.UTC) // 00:00 in America/Toronto.
+	h := Habit{ID: 1, ReminderTZ: "America/Toronto"}
+	due, dayKey, logDate := freezeDueNow(h, now)
+	if !due {
+		t.Fatal("expected freeze check to run at local midnight")
+	}
+	if dayKey != "Su" {
+		t.Fatalf("dayKey = %q, want %q", dayKey, "Su")
+	}
+	if got := logDate.Format("2006-01-02"); got != "2026-03-15" {
+		t.Fatalf("logDate = %q, want %q", got, "2026-03-15")
+	}
+}
+
+func TestFreezeDueNowTimezoneNotMidnight(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 3, 16, 4, 1, 0, 0, time.UTC) // 00:01 in America/Toronto.
+	h := Habit{ID: 1, ReminderTZ: "America/Toronto"}
+	due, _, _ := freezeDueNow(h, now)
+	if due {
+		t.Fatal("expected freeze check not to run outside local midnight minute")
+	}
+}
+
+func TestFreezeDueNowLegacyUTC(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 3, 16, 0, 0, 0, 0, time.UTC)
+	h := Habit{ID: 1, ReminderTZ: ""}
+	due, dayKey, logDate := freezeDueNow(h, now)
+	if !due {
+		t.Fatal("expected legacy UTC freeze check at UTC midnight")
+	}
+	if dayKey != "Su" {
+		t.Fatalf("dayKey = %q, want %q", dayKey, "Su")
+	}
+	if got := logDate.Format("2006-01-02"); got != "2026-03-15" {
+		t.Fatalf("logDate = %q, want %q", got, "2026-03-15")
+	}
+}
+
 type assertErr string
 
 func (e assertErr) Error() string { return string(e) }

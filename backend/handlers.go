@@ -233,6 +233,17 @@ func isValidTimeZone(tz string) bool {
 	return err == nil
 }
 
+func isE2EEEncryptedValue(value string) bool {
+	return strings.HasPrefix(value, "e2ee:v1:")
+}
+
+func isValidE2EEHabitPayload(name, notes string) bool {
+	if !isE2EEEncryptedValue(name) {
+		return false
+	}
+	return notes == "" || isE2EEEncryptedValue(notes)
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 func dayCode(t time.Time) string {
@@ -977,8 +988,9 @@ func createHabit(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid reminder timezone"})
 		return
 	}
-	if input.ReminderTime == "" {
-		input.ReminderTZ = ""
+	if user.E2EEEnabled && !isValidE2EEHabitPayload(input.Name, input.Notes) {
+		c.JSON(http.StatusLocked, gin.H{"error": "Vault is locked. Unlock vault before adding habits while E2EE is enabled"})
+		return
 	}
 
 	habit := Habit{
@@ -1058,9 +1070,6 @@ func updateHabit(c *gin.Context) {
 			return
 		}
 		habit.ReminderTime = *input.ReminderTime
-		if *input.ReminderTime == "" {
-			habit.ReminderTZ = ""
-		}
 	}
 	if input.ReminderTZ != nil {
 		trimmed := strings.TrimSpace(*input.ReminderTZ)
@@ -1068,11 +1077,7 @@ func updateHabit(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid reminder timezone"})
 			return
 		}
-		if habit.ReminderTime == "" {
-			habit.ReminderTZ = ""
-		} else {
-			habit.ReminderTZ = trimmed
-		}
+		habit.ReminderTZ = trimmed
 	}
 
 	// Backward compat: sync HabitLog when complete flag is toggled

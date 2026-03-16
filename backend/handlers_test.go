@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -75,6 +77,23 @@ func TestIsValidTimeZone(t *testing.T) {
 	}
 	if isValidTimeZone("Not/A-Real-TZ") {
 		t.Fatal("expected invalid timezone to fail")
+	}
+}
+
+func TestIsValidE2EEHabitPayload(t *testing.T) {
+	t.Parallel()
+
+	if !isValidE2EEHabitPayload("e2ee:v1:abc", "") {
+		t.Fatal("expected encrypted name + empty notes to be valid")
+	}
+	if !isValidE2EEHabitPayload("e2ee:v1:abc", "e2ee:v1:def") {
+		t.Fatal("expected encrypted name + encrypted notes to be valid")
+	}
+	if isValidE2EEHabitPayload("Plain", "") {
+		t.Fatal("expected plaintext name to be invalid")
+	}
+	if isValidE2EEHabitPayload("e2ee:v1:abc", "plain note") {
+		t.Fatal("expected plaintext notes to be invalid when non-empty")
 	}
 }
 
@@ -401,5 +420,40 @@ func TestClearLoginFailures(t *testing.T) {
 	clearLoginFailures(ip, username)
 	if got := loginLockoutRemaining(ip, username, now); got != 0 {
 		t.Fatalf("expected lockout to be cleared, got %v", got)
+	}
+}
+
+func TestCreateHabitRejectsPlaintextWhenE2EEEnabled(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	r := gin.New()
+	r.POST("/habits", func(c *gin.Context) {
+		c.Set("user", User{ID: "user-1", E2EEEnabled: true})
+		createHabit(c)
+	})
+
+	body := map[string]any{
+		"name":         "Read 20 pages",
+		"recurrence":   "Su-Mo-Tu-We-Th-Fr-Sa",
+		"positiveType": true,
+		"notes":        "",
+		"reminderTime": "",
+		"reminderTz":   "America/Toronto",
+	}
+	raw, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("failed to marshal request body: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/habits", bytes.NewReader(raw))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusLocked {
+		t.Fatalf("status = %d, want %d; body=%s", w.Code, http.StatusLocked, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "Vault is locked") {
+		t.Fatalf("expected vault locked error, got: %s", w.Body.String())
 	}
 }

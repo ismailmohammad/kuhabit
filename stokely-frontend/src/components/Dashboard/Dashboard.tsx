@@ -1079,6 +1079,16 @@ export default function Dashboard() {
         setHabitToEdit(null);
     };
 
+    const openCreate = () => {
+        if (userInfo?.e2eeEnabled && !isUnlocked) {
+            toast.error('Unlock vault before adding a new habit');
+            setVaultModalOpen(true);
+            return;
+        }
+        setHabitToEdit(null);
+        setModalOpen(true);
+    };
+
     const date = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
     const normalizedQuery = searchQuery.trim().toLowerCase();
     const filteredHabits = normalizedQuery
@@ -1241,7 +1251,7 @@ export default function Dashboard() {
                         </h1>
                         <DayLabel>{date}</DayLabel>
                     </PageTitle>
-                    <AddButton onClick={() => { setHabitToEdit(null); setModalOpen(true); }}>
+                    <AddButton onClick={openCreate}>
                         + New Habit
                     </AddButton>
                 </PageHeader>
