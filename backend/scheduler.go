@@ -110,7 +110,7 @@ func reminderDueNow(h Habit, nowUTC time.Time) (bool, string, time.Time, time.Ti
 		if h.ReminderTime != currentUTC {
 			return false, "", time.Time{}, time.Time{}
 		}
-		return true, dayCode(nowUTC), nowUTC.Truncate(24 * time.Hour), nowUTC
+		return true, weekdayCode(nowUTC.Weekday()), nowUTC.Truncate(24 * time.Hour), nowUTC
 	}
 
 	loc, err := time.LoadLocation(h.ReminderTZ)
@@ -127,7 +127,7 @@ func reminderDueNow(h Habit, nowUTC time.Time) (bool, string, time.Time, time.Ti
 	if err != nil {
 		return false, "", time.Time{}, time.Time{}
 	}
-	return true, dayCode(localNow), logDate.UTC(), localNow
+	return true, weekdayCode(localNow.Weekday()), logDate.UTC(), localNow
 }
 
 func reminderBody(e2eeEnabled bool, habitName string) string {
@@ -169,37 +169,36 @@ func sendPushAndRecord(sub PushSubscription, title, body string) (int, error) {
 	return statusCode, nil
 }
 
-// runNightlyFreezeLoop fires once per day just after UTC midnight to auto-consume
-// streak freezes for any habits that had a missed scheduled day yesterday.
+// runNightlyFreezeLoop checks every minute and consumes streak freezes at each
+// habit's local midnight (based on habit.reminder_tz; UTC for legacy records).
 func runNightlyFreezeLoop() {
 	for {
 		now := time.Now().UTC()
-		// Next midnight UTC
-		nextMidnight := now.Truncate(24 * time.Hour).Add(24 * time.Hour)
-		time.Sleep(time.Until(nextMidnight))
-		runNightlyFreezeCheck(nextMidnight)
+		nextMinute := now.Truncate(time.Minute).Add(time.Minute)
+		time.Sleep(time.Until(nextMinute))
+		runNightlyFreezeCheck(nextMinute.Truncate(time.Minute))
 	}
 }
 
 func runNightlyFreezeCheck(now time.Time) {
-	yesterday := now.AddDate(0, 0, -1)
-	yesterdayKey := dayCode(yesterday)
-
 	var habits []Habit
 	db.Find(&habits)
 
 	for _, h := range habits {
-		if !containsDay(h.Recurrence, yesterdayKey) {
+		isDueNow, dayKey, logDate := freezeDueNow(h, now)
+		if !isDueNow {
 			continue
 		}
-		if h.RecurrenceEnd != nil && yesterday.After(h.RecurrenceEnd.UTC().Truncate(24*time.Hour)) {
+		if !containsDay(h.Recurrence, dayKey) {
 			continue
 		}
-
+		if h.RecurrenceEnd != nil && logDate.After(h.RecurrenceEnd.UTC().Truncate(24*time.Hour)) {
+			continue
+		}
 		// Already logged yesterday (real or frozen)?
 		var count int64
 		db.Model(&HabitLog{}).
-			Where("habit_id = ? AND log_date = ?", h.ID, yesterday).
+			Where("habit_id = ? AND log_date = ?", h.ID, logDate).
 			Count(&count)
 		if count > 0 {
 			continue
@@ -211,10 +210,51 @@ func runNightlyFreezeCheck(now time.Time) {
 			continue
 		}
 
-		// Create a frozen log entry for yesterday
-		db.Create(&HabitLog{HabitID: h.ID, UserID: h.UserID, LogDate: yesterday, WasFrozen: true})
+		// Create a frozen log entry for the missed local day.
+		db.Create(&HabitLog{HabitID: h.ID, UserID: h.UserID, LogDate: logDate, WasFrozen: true})
 		freeze.Count--
 		db.Save(&freeze)
+	}
+}
+
+func freezeDueNow(h Habit, nowUTC time.Time) (bool, string, time.Time) {
+	localNow := nowUTC
+	if h.ReminderTZ != "" {
+		loc, err := time.LoadLocation(h.ReminderTZ)
+		if err != nil {
+			log.Printf("invalid reminder timezone %q for habit %d: %v", h.ReminderTZ, h.ID, err)
+			return false, "", time.Time{}
+		}
+		localNow = nowUTC.In(loc)
+	}
+	if localNow.Hour() != 0 || localNow.Minute() != 0 {
+		return false, "", time.Time{}
+	}
+
+	missedLocalDate := localNow.AddDate(0, 0, -1)
+	y, m, d := missedLocalDate.Date()
+	logDate := time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+	return true, weekdayCode(missedLocalDate.Weekday()), logDate
+}
+
+func weekdayCode(w time.Weekday) string {
+	switch w {
+	case time.Sunday:
+		return "Su"
+	case time.Monday:
+		return "Mo"
+	case time.Tuesday:
+		return "Tu"
+	case time.Wednesday:
+		return "We"
+	case time.Thursday:
+		return "Th"
+	case time.Friday:
+		return "Fr"
+	case time.Saturday:
+		return "Sa"
+	default:
+		return ""
 	}
 }
 
